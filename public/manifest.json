@@ -1,0 +1,31 @@
+{
+  "name": "AEROSTRIKE: OMEGA",
+  "short_name": "AEROSTRIKE",
+  "description": "High-octane 2D serverless P2P Capture The Flag multiplayer shooter with jetpacks and recoil physics.",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#060913",
+  "theme_color": "#00f0ff",
+  "categories": ["games", "action", "multiplayer"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

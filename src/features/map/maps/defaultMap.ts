@@ -1,0 +1,67 @@
+import type { GameMap } from '../types';
+
+export const defaultMap: GameMap = {
+  id: 'training-ground',
+  name: 'Training Ground',
+  width: 900,
+  height: 600,
+  backgroundColor: '#1a1f26',
+  baseBlue: { x: 50, y: 450, width: 120, height: 110 },
+  baseRed: { x: 730, y: 450, width: 120, height: 110 },
+  flagBlue: { x: 100, y: 480 },
+  flagRed: { x: 800, y: 480 },
+  spawnPointsBlue: [{ x: 80, y: 500 }],
+  spawnPointsRed: [{ x: 820, y: 500 }],
+  weaponSpawns: [
+    { id: 'train-shotgun', x: 200, y: 400, weaponType: 'shotgun' },
+    { id: 'train-sniper', x: 450, y: 260, weaponType: 'sniper' },
+    { id: 'train-rocket', x: 700, y: 400, weaponType: 'rocket' },
+  ],
+  bouncePads: [
+    { id: 'def-pad-left', x: 255, y: 548, width: 54, height: 12, launchVy: -10.5, color: '#22d3ee' },
+    { id: 'def-pad-right', x: 591, y: 548, width: 54, height: 12, launchVy: -10.5, color: '#22d3ee' },
+  ],
+  refillStations: [
+    { id: 'def-fuel-mid', x: 450, y: 530, stationType: 'fuel', cooldownSec: 10 },
+    { id: 'def-med-left', x: 150, y: 392, stationType: 'medkit', cooldownSec: 14 },
+    { id: 'def-med-right', x: 750, y: 392, stationType: 'medkit', cooldownSec: 14 },
+  ],
+  obstacles: [
+    {
+      id: 'ground',
+      x: 0,
+      y: 560,
+      width: 900,
+      height: 40,
+      color: '#2d3748',
+      type: 'ground',
+    },
+    {
+      id: 'plat-left',
+      x: 120,
+      y: 420,
+      width: 180,
+      height: 18,
+      color: '#4a5568',
+      type: 'platform',
+    },
+    {
+      id: 'plat-center',
+      x: 360,
+      y: 280,
+      width: 180,
+      height: 18,
+      color: '#4a5568',
+      type: 'platform',
+    },
+    {
+      id: 'plat-right',
+      x: 600,
+      y: 420,
+      width: 180,
+      height: 18,
+      color: '#4a5568',
+      type: 'platform',
+    },
+  ],
+};

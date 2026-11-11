@@ -1,0 +1,159 @@
+@import "tailwindcss";
+
+html,
+body {
+  overscroll-behavior: none;
+  background-color: #060913;
+}
+
+@layer utilities {
+  /* High-Tech Cyberpunk Space Grid Background */
+  .cyber-grid-bg {
+    background-color: #060913;
+    background-image: 
+      radial-gradient(circle at 50% 30%, rgba(0, 240, 255, 0.08) 0%, transparent 60%),
+      radial-gradient(circle at 80% 80%, rgba(255, 0, 85, 0.05) 0%, transparent 50%),
+      linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 48px 48px, 48px 48px;
+    background-position: 0 0, 0 0, center center, center center;
+  }
+
+  /* Scanline CRT overlay */
+  .scanline-overlay {
+    background: repeating-linear-gradient(
+      0deg,
+      transparent 0px,
+      transparent 2px,
+      rgba(0, 0, 0, 0.15) 3px
+    );
+    pointer-events: none;
+  }
+
+  /* Cyber Glass Panel */
+  .cyber-panel {
+    background: rgba(10, 16, 30, 0.82);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(0, 240, 255, 0.2);
+    box-shadow: 
+      0 0 25px -5px rgba(0, 240, 255, 0.12),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
+      0 25px 50px -12px rgba(0, 0, 0, 0.85);
+  }
+
+  /* Team Blue / Cyan Glowing Glass */
+  .cyber-panel-blue {
+    background: rgba(8, 18, 38, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1.5px solid rgba(0, 240, 255, 0.4);
+    box-shadow: 
+      0 0 35px -5px rgba(0, 240, 255, 0.25),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
+      0 20px 40px -10px rgba(0, 15, 30, 0.9);
+  }
+
+  /* Team Red / Crimson Glowing Glass */
+  .cyber-panel-red {
+    background: rgba(36, 10, 20, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1.5px solid rgba(255, 0, 85, 0.4);
+    box-shadow: 
+      0 0 35px -5px rgba(255, 0, 85, 0.25),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
+      0 20px 40px -10px rgba(30, 0, 10, 0.9);
+  }
+
+  /* Neon Cyan Glow */
+  .glow-cyan {
+    box-shadow: 0 0 20px rgba(0, 240, 255, 0.4), inset 0 0 12px rgba(0, 240, 255, 0.2);
+  }
+
+  /* Neon Crimson Glow */
+  .glow-red {
+    box-shadow: 0 0 20px rgba(255, 0, 85, 0.4), inset 0 0 12px rgba(255, 0, 85, 0.2);
+  }
+
+  /* Neon Amber Glow */
+  .glow-amber {
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.4), inset 0 0 12px rgba(245, 158, 11, 0.2);
+  }
+
+  /* Chamfered Cut Corner */
+  .clip-chamfer {
+    clip-path: polygon(
+      0 0,
+      calc(100% - 12px) 0,
+      100% 12px,
+      100% 100%,
+      12px 100%,
+      0 calc(100% - 12px)
+    );
+  }
+
+  .clip-chamfer-lg {
+    clip-path: polygon(
+      0 0,
+      calc(100% - 20px) 0,
+      100% 20px,
+      100% 100%,
+      20px 100%,
+      0 calc(100% - 20px)
+    );
+  }
+
+  /* Diagonal Caution Hazard Tape */
+  .hazard-tape {
+    background: repeating-linear-gradient(
+      -45deg,
+      #f59e0b,
+      #f59e0b 8px,
+      #18181b 8px,
+      #18181b 16px
+    );
+  }
+
+  /* Shimmer gradient text */
+  .text-cyber-shimmer {
+    background: linear-gradient(135deg, #ffffff 0%, #00f0ff 50%, #38bdf8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .text-red-shimmer {
+    background: linear-gradient(135deg, #ffffff 0%, #ff0055 50%, #f43f5e 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+}
+
+/* Atmospheric Animations */
+@keyframes neon-pulse {
+  0%, 100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 12px rgba(0, 240, 255, 0.6));
+  }
+  50% {
+    opacity: 0.75;
+    filter: drop-shadow(0 0 6px rgba(0, 240, 255, 0.3));
+  }
+}
+
+.animate-neon-pulse {
+  animation: neon-pulse 2.5s infinite ease-in-out;
+}
+
+@keyframes sweep-line {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(1000%);
+  }
+}
+
+.animate-sweep {
+  animation: sweep-line 6s linear infinite;
+}
