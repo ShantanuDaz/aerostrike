@@ -12,6 +12,21 @@ html,
 body {
   overscroll-behavior: none;
   background-color: #060913;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+input,
+textarea,
+select {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+button,
+a,
+[role="button"] {
+  touch-action: manipulation;
 }
 
 @layer utilities {

@@ -9,10 +9,18 @@ import {
   type HudScale,
   useSettingsStore,
 } from "../../settings/settingsStore";
-import { Eye, Sliders, ZoomIn } from "lucide-react";
+import {
+  applySwUpdate,
+  checkForSwUpdate,
+  PwaInstallButton,
+  requestPersistentStorage,
+  usePwaStore,
+} from "../../pwa";
+import { Check, Eye, RefreshCw, ShieldCheck, Sliders, Smartphone, ZoomIn } from "lucide-react";
 
 export function DisplayHudTab() {
   const settings = useSettingsStore();
+  const pwa = usePwaStore();
   const autoPreviewZoom =
     typeof window !== "undefined"
       ? computeAutoCameraZoom(window.innerWidth, window.innerHeight)
@@ -313,6 +321,101 @@ export function DisplayHudTab() {
         >
           {settings.showTouchHints ? "ON" : "OFF"}
         </button>
+      </div>
+
+      {/* Native App & Offline PWA Status */}
+      <div className="p-3.5 sm:p-4 bg-slate-950/70 border border-cyan-500/30 clip-chamfer space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-white flex items-center gap-2">
+              <Smartphone className="w-4 h-4 text-cyan-400 shrink-0" />
+              Native App &amp; Offline Mode
+            </div>
+            <div className="text-xs text-slate-400 mt-0.5">
+              Install as a standalone fullscreen app, verify offline asset cache, and apply updates.
+            </div>
+          </div>
+          <span
+            className={`shrink-0 px-2.5 py-1 text-[10px] font-mono font-black uppercase border clip-chamfer ${
+              pwa.isInstalled
+                ? "bg-emerald-950/70 border-emerald-400/60 text-emerald-300"
+                : "bg-slate-900 border-slate-700 text-slate-300"
+            }`}
+          >
+            {pwa.isInstalled ? `Native (${pwa.displayMode})` : "Browser Tab"}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 xs:grid-cols-2 gap-2 text-[11px] font-mono">
+          <div className="p-2.5 bg-slate-900/75 border border-slate-800 clip-chamfer flex items-center justify-between gap-2">
+            <span className="text-slate-400">Offline Cache</span>
+            <span className={pwa.swRegistered ? "text-emerald-300 font-bold" : "text-slate-400"}>
+              {pwa.swRegistered
+                ? pwa.offlineAssetCount !== null
+                  ? `Ready (${pwa.offlineAssetCount} files)`
+                  : "Active"
+                : "Standby"}
+            </span>
+          </div>
+
+          <div className="p-2.5 bg-slate-900/75 border border-slate-800 clip-chamfer flex items-center justify-between gap-2">
+            <span className="text-slate-400">Storage Lock</span>
+            {pwa.storagePersisted ? (
+              <span className="text-emerald-300 font-bold flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5" /> Protected
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  sounds.playUiClick();
+                  void requestPersistentStorage();
+                }}
+                className="text-cyan-300 hover:text-white underline cursor-pointer font-bold"
+              >
+                Protect Cache
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <PwaInstallButton />
+
+          {pwa.swUpdateReady ? (
+            <button
+              type="button"
+              onClick={() => {
+                sounds.playUiClick();
+                applySwUpdate();
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-cyan-400 to-sky-400 hover:from-cyan-300 hover:to-sky-300 text-slate-950 font-mono font-black text-xs uppercase tracking-wider clip-chamfer cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Apply Update &amp; Reload</span>
+            </button>
+          ) : pwa.swRegistered ? (
+            <button
+              type="button"
+              disabled={pwa.swChecking}
+              onClick={() => {
+                sounds.playUiClick();
+                void checkForSwUpdate();
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-cyan-400/50 text-slate-200 text-xs font-mono font-bold uppercase tracking-wider clip-chamfer cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${pwa.swChecking ? "animate-spin" : ""}`} />
+              <span>{pwa.swChecking ? "Checking..." : "Check for Updates"}</span>
+            </button>
+          ) : null}
+
+          {pwa.isInstalled && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-mono text-emerald-300/90 ml-auto">
+              <Check className="w-3.5 h-3.5" />
+              Installed on Device
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

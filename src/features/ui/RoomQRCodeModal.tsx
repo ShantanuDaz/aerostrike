@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { X, Copy, Check, QrCode, Sparkles, Smartphone } from 'lucide-react';
+import { X, Copy, Check, QrCode, Share2, Sparkles, Smartphone } from 'lucide-react';
 import { sounds } from '../audio/soundEngine';
+import { isNativeShareSupported, shareRoomInvite } from '../pwa';
 
 interface RoomQRCodeModalProps {
   isOpen: boolean;
@@ -67,6 +68,16 @@ export function RoomQRCodeModal({ isOpen, roomCode, onClose }: RoomQRCodeModalPr
           // ignore clipboard permission rejections
         });
     }
+  };
+
+  const handleShare = () => {
+    sounds.playUiClick();
+    void shareRoomInvite(roomCode).then((result) => {
+      if (result === 'copied') {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
+    });
   };
 
   return (
@@ -144,6 +155,17 @@ export function RoomQRCodeModal({ isOpen, roomCode, onClose }: RoomQRCodeModalPr
                     </>
                   )}
                 </button>
+
+                {isNativeShareSupported() && (
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    className="w-full py-2 px-4 bg-slate-900/90 hover:bg-slate-800 border border-cyan-500/40 hover:border-cyan-400 text-cyan-200 hover:text-white font-mono font-bold text-xs uppercase tracking-wider clip-chamfer transition cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Share2 className="w-4 h-4 text-cyan-400" />
+                    <span>Share via System</span>
+                  </button>
+                )}
 
                 <button
                   type="button"

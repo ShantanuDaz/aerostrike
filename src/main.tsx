@@ -3,20 +3,17 @@ import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from './App.tsx';
 import { AppErrorBoundary } from './features/ui/AppErrorBoundary';
+import { initPwaLifecycle } from './features/pwa';
 
-// Register PWA Service Worker
-if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/sw.js')
-      .then((reg) => {
-        console.log('[PWA] Service Worker registered with scope:', reg.scope);
-      })
-      .catch((err) => {
-        console.warn('[PWA] Service Worker registration failed:', err);
-      });
-  });
-}
+initPwaLifecycle((roomCode) => {
+  try {
+    const nextUrl = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(roomCode)}`;
+    window.history.replaceState(null, '', nextUrl);
+    window.dispatchEvent(new CustomEvent('aerostrike:launch-room', { detail: roomCode }));
+  } catch {
+    // ignore restricted History API environments
+  }
+});
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

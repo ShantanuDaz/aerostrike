@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Gamepad2,
   LogIn,
@@ -9,12 +9,14 @@ import {
   Settings,
   Volume2,
   VolumeX,
+  WifiOff,
 } from 'lucide-react';
 import { useAvatarStore } from '../avatar/avatarStore';
 import { useSettingsStore, type SettingsTab } from '../settings/settingsStore';
 import { WEAPONS } from '../combat/weaponsConfig';
 import { networkManager } from '../network/peerRoom';
 import { sounds } from '../audio/soundEngine';
+import { PwaInstallButton, PwaOfflinePill, usePwaStore } from '../pwa';
 import { OrbitalHangarCanvas } from './mainMenu/OrbitalHangarCanvas';
 import { JoinSquadModal } from './mainMenu/JoinSquadModal';
 import {
@@ -24,6 +26,8 @@ import {
 
 interface MainMenuScreenProps {
   invitedRoomCode?: string | null;
+  initialOpenSolo?: boolean;
+  onSoloModalOpened?: () => void;
   onOpenSettings: (tab?: SettingsTab) => void;
   onEnterWarRoom: (roomCode: string, isHost?: boolean) => void;
   onStartSoloPractice: (config?: SoloLaunchConfig) => void;
@@ -32,6 +36,8 @@ interface MainMenuScreenProps {
 
 export function MainMenuScreen({
   invitedRoomCode,
+  initialOpenSolo = false,
+  onSoloModalOpened,
   onOpenSettings,
   onEnterWarRoom,
   onStartSoloPractice,
@@ -47,8 +53,16 @@ export function MainMenuScreen({
   const toggleMute = useSettingsStore((s) => s.toggleMute);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
 
+  const isOnline = usePwaStore((s) => s.isOnline);
   const [showJoinModal, setShowJoinModal] = useState(false);
-  const [showSoloModal, setShowSoloModal] = useState(false);
+  const [showSoloModal, setShowSoloModal] = useState(() => Boolean(initialOpenSolo));
+  const [offlineWarning, setOfflineWarning] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialOpenSolo) {
+      onSoloModalOpened?.();
+    }
+  }, [initialOpenSolo, onSoloModalOpened]);
 
   const isCoarsePointer =
     typeof window !== 'undefined' &&
@@ -70,6 +84,11 @@ export function MainMenuScreen({
 
   const handleCreateRoom = () => {
     sounds.playUiClick();
+    if (!isOnline) {
+      setOfflineWarning('Offline — Solo Skirmish works offline. Reconnect to host P2P matches.');
+      return;
+    }
+    setOfflineWarning(null);
     ensureEnlistedWithCallsign();
     const newCode = 'ROOM-' + Math.random().toString(36).substring(2, 7).toUpperCase();
     networkManager.connect(newCode, true);
@@ -135,14 +154,16 @@ export function MainMenuScreen({
                   AERO<span className="text-cyan-400">STRIKE</span>
                 </h1>
               </div>
-              <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1 text-[9px] sm:text-[10px] font-mono text-cyan-300/80 uppercase tracking-widest">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+              <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1 text-[9px] sm:text-[10px] font-mono text-cyan-300/80 uppercase tracking-widest flex-wrap">
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
                 <span className="truncate">ORBITAL HANGAR // 2D P2P CTF</span>
+                <PwaOfflinePill />
               </div>
             </div>
 
-            {/* Right: Music, Audio Mute & Full Settings Screen Button */}
+            {/* Right: Install PWA, Music, Audio Mute & Full Settings Screen Button */}
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <PwaInstallButton compact />
               <button
                 onClick={() => {
                   updateSettings({ musicEnabled: !musicEnabled });
@@ -232,11 +253,24 @@ export function MainMenuScreen({
                 </button>
               )}
 
+              {/* Offline P2P Notice */}
+              {!isOnline && offlineWarning && (
+                <div className="px-3 py-1.5 bg-amber-950/85 border border-amber-400/60 text-amber-200 text-[10px] font-mono clip-chamfer flex items-center gap-2">
+                  <WifiOff className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                  <span>{offlineWarning}</span>
+                </div>
+              )}
+
               {/* Secondary Row: Join Squad & Solo Practice */}
               <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
                 <button
                   onClick={() => {
                     sounds.playUiClick();
+                    if (!isOnline) {
+                      setOfflineWarning('Offline — Solo Skirmish works offline. Reconnect to join P2P rooms.');
+                      return;
+                    }
+                    setOfflineWarning(null);
                     setShowJoinModal(true);
                   }}
                   className="py-2 short:py-1.5 lg:tall:py-3 px-2.5 lg:tall:px-3 bg-slate-950/85 hover:bg-slate-900 border border-cyan-500/40 hover:border-cyan-400 text-cyan-200 hover:text-white font-mono font-bold text-[11px] lg:text-xs uppercase tracking-wider clip-chamfer transition cursor-pointer flex items-center justify-center gap-1.5 lg:gap-2"

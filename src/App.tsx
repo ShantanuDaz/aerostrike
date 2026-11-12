@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react';
 import { MainMenuScreen } from './features/screens/MainMenuScreen';
 import type { SoloLaunchConfig } from './features/screens/mainMenu/SoloSkirmishModal';
 import type { ScreenState } from './features/screens/types';
@@ -20,6 +20,15 @@ import {
   requestMobileFullscreen,
   resetFullscreenDismissal,
 } from './features/controls/mobileFullscreen';
+import {
+  IOSInstallModal,
+  PwaUpdateBanner,
+  parseLaunchParams,
+  syncScreenWakeLock,
+  tryLockLandscapeOrientation,
+  tryUnlockOrientation,
+  type LaunchShortcutAction,
+} from './features/pwa';
 import type { Team } from './features/ctf/types';
 
 const SettingsScreen = lazy(() =>
@@ -52,10 +61,17 @@ function ScreenLoadingFallback({ label }: { label: string }) {
   );
 }
 
-function getInitialRoomParam(): string | null {
-  const params = new URLSearchParams(window.location.search);
-  const roomParam = params.get('room');
-  return roomParam ? roomParam.trim().toUpperCase() : null;
+function getInitialBoot(): {
+  roomCode: string | null;
+  action: LaunchShortcutAction | null;
+  autoHostCode: string | null;
+} {
+  const launch = parseLaunchParams(window.location.search);
+  const autoHostCode =
+    !launch.roomCode && launch.action === 'host'
+      ? 'ROOM-' + Math.random().toString(36).substring(2, 7).toUpperCase()
+      : null;
+  return { ...launch, autoHostCode };
 }
 
 export const App = () => {
@@ -65,32 +81,103 @@ export const App = () => {
   const matchStatus = useCTFStore((s) => s.matchStatus);
   const crtScanlines = useSettingsStore((s) => s.crtScanlines);
 
-  const [invitedRoom, setInvitedRoom] = useState<string | null>(getInitialRoomParam);
+  const [initialBoot] = useState(getInitialBoot);
+  const [invitedRoom, setInvitedRoom] = useState<string | null>(
+    () => initialBoot.roomCode ?? initialBoot.autoHostCode,
+  );
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('avatar');
+  const [openSoloOnBoot, setOpenSoloOnBoot] = useState<boolean>(
+    () => !initialBoot.roomCode && initialBoot.action === 'solo',
+  );
 
-  // Land directly on the Orbital Hangar Stage (or auto-connect if returning via ?room= invite)
+  // Land directly on the Orbital Hangar Stage (or honor invite / PWA shortcut action)
   const [screen, setScreen] = useState<ScreenState>(() => {
-    const roomParam = getInitialRoomParam();
-    if (roomParam && isEnlisted) {
+    if (initialBoot.roomCode && isEnlisted) {
       return 'connecting';
+    }
+    if (initialBoot.autoHostCode) {
+      return 'war_room';
+    }
+    if (!initialBoot.roomCode && initialBoot.action === 'armory') {
+      return 'settings';
     }
     return 'main_menu';
   });
 
-  // Mobile-only: request fullscreen during active combat deployment (never hijack menus or trap manual exits)
+  // Synchronize PWA ?action=host external connection & URL cleanup
+  useEffect(() => {
+    if (initialBoot.autoHostCode) {
+      const avatarState = useAvatarStore.getState();
+      const clean =
+        avatarState.avatar.callsign.trim() ||
+        `Pilot_${Math.floor(100 + Math.random() * 900)}`;
+      avatarState.confirmEnlistment({ ...avatarState.avatar, callsign: clean });
+      if (useNetworkStore.getState().roomCode !== initialBoot.autoHostCode) {
+        networkManager.connect(initialBoot.autoHostCode, true);
+      }
+      try {
+        const nextUrl = `${window.location.origin}${window.location.pathname}?room=${initialBoot.autoHostCode}`;
+        window.history.replaceState(null, '', nextUrl);
+      } catch {
+        // ignore
+      }
+    } else if (initialBoot.action) {
+      try {
+        const cleanUrl = `${window.location.origin}${window.location.pathname}${
+          initialBoot.roomCode ? `?room=${encodeURIComponent(initialBoot.roomCode)}` : ''
+        }`;
+        window.history.replaceState(null, '', cleanUrl);
+      } catch {
+        // ignore
+      }
+    }
+  }, [initialBoot]);
+
+  useEffect(() => {
+    const onExternalLaunchRoom = (e: Event) => {
+      const code = (e as CustomEvent<string>).detail;
+      if (!code || screen === 'in_game') return;
+      setInvitedRoom(code);
+      if (useAvatarStore.getState().isEnlisted) {
+        if (useNetworkStore.getState().roomCode !== code) {
+          networkManager.connect(code, false);
+        }
+        setScreen('connecting');
+      } else {
+        setScreen('main_menu');
+      }
+    };
+    window.addEventListener('aerostrike:launch-room', onExternalLaunchRoom);
+    return () => window.removeEventListener('aerostrike:launch-room', onExternalLaunchRoom);
+  }, [screen]);
+
+  // Keep mobile/laptop screen awake during active combat, staging, and uplink
+  useEffect(() => {
+    const shouldKeepAwake =
+      screen === 'in_game' || screen === 'war_room' || screen === 'connecting';
+    syncScreenWakeLock(shouldKeepAwake);
+    return () => {
+      syncScreenWakeLock(false);
+    };
+  }, [screen]);
+
+  // Mobile-only: request fullscreen & landscape orientation during active combat deployment
   useEffect(() => {
     if (screen !== 'in_game' || !isMobileDevice()) return;
 
     resetFullscreenDismissal();
     requestMobileFullscreen();
+    void tryLockLandscapeOrientation();
 
     const tryEnterCombatFullscreen = () => {
       requestMobileFullscreen();
+      void tryLockLandscapeOrientation();
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         requestMobileFullscreen();
+        void tryLockLandscapeOrientation();
       }
     };
 
@@ -100,6 +187,7 @@ export const App = () => {
     return () => {
       window.removeEventListener('touchend', tryEnterCombatFullscreen);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      tryUnlockOrientation();
     };
   }, [screen]);
 
@@ -324,22 +412,24 @@ export const App = () => {
     setScreen('main_menu');
   };
 
+  let content: ReactNode;
+
   // --- SCREEN 1: ORBITAL HANGAR STAGE (MAIN MENU) ---
   if (screen === 'main_menu') {
-    return (
+    content = (
       <MainMenuScreen
         invitedRoomCode={invitedRoom}
+        initialOpenSolo={openSoloOnBoot}
+        onSoloModalOpened={() => setOpenSoloOnBoot(false)}
         onOpenSettings={handleOpenSettings}
         onEnterWarRoom={handleEnterWarRoom}
         onStartSoloPractice={handleStartSoloPractice}
         onJoinInvitedRoom={handleJoinInvitedRoom}
       />
     );
-  }
-
-  // --- SCREEN 2: SETTINGS & ARMORY ---
-  if (screen === 'settings') {
-    return (
+  } else if (screen === 'settings') {
+    // --- SCREEN 2: SETTINGS & ARMORY ---
+    content = (
       <Suspense fallback={<ScreenLoadingFallback label="Loading Armory..." />}>
         <SettingsScreen
           initialTab={settingsTab}
@@ -347,11 +437,9 @@ export const App = () => {
         />
       </Suspense>
     );
-  }
-
-  // --- SCREEN 3: CONNECTING / SECURE UPLINK LOADING SCREEN ---
-  if (screen === 'connecting') {
-    return (
+  } else if (screen === 'connecting') {
+    // --- SCREEN 3: CONNECTING / SECURE UPLINK LOADING SCREEN ---
+    content = (
       <Suspense fallback={<ScreenLoadingFallback label="Initializing Uplink..." />}>
         <ConnectingScreen
           roomCode={invitedRoom || useNetworkStore.getState().roomCode || 'UNKNOWN'}
@@ -360,11 +448,9 @@ export const App = () => {
         />
       </Suspense>
     );
-  }
-
-  // --- SCREEN 4: WAR ROOM (PREPARING / STAGING PAGE) ---
-  if (screen === 'war_room') {
-    return (
+  } else if (screen === 'war_room') {
+    // --- SCREEN 4: WAR ROOM (PREPARING / STAGING PAGE) ---
+    content = (
       <Suspense fallback={<ScreenLoadingFallback label="Entering War Room..." />}>
         <WarRoomScreen
           onStartMatch={handleStartMatch}
@@ -372,27 +458,35 @@ export const App = () => {
         />
       </Suspense>
     );
+  } else {
+    // --- SCREEN 5: IN-GAME (LIVE CTF MATCH) ---
+    content = (
+      <Suspense fallback={<ScreenLoadingFallback label="Deploying Combat Arena..." />}>
+        <div className="fixed inset-0 overflow-hidden touch-none select-none bg-[#060913]">
+          {/* Scanline CRT overlay */}
+          {crtScanlines && (
+            <div className="absolute inset-0 scanline-overlay pointer-events-none z-10" />
+          )}
+
+          {/* Top Floating HUD */}
+          <HUD onExitToWarRoom={handleExitActiveBattle} onAbortRoom={handleLeaveWarRoom} />
+
+          {/* Full-bleed 60 FPS Game Canvas */}
+          <GameCanvas map={selectedMap} />
+
+          {/* Match Victory / Defeat Modal */}
+          <GameOverModal onLeaveMatch={handleExitActiveBattle} />
+        </div>
+      </Suspense>
+    );
   }
 
-  // --- SCREEN 5: IN-GAME (LIVE CTF MATCH) ---
   return (
-    <Suspense fallback={<ScreenLoadingFallback label="Deploying Combat Arena..." />}>
-      <div className="fixed inset-0 overflow-hidden touch-none select-none bg-[#060913]">
-        {/* Scanline CRT overlay */}
-        {crtScanlines && (
-          <div className="absolute inset-0 scanline-overlay pointer-events-none z-10" />
-        )}
-
-        {/* Top Floating HUD */}
-        <HUD onExitToWarRoom={handleExitActiveBattle} onAbortRoom={handleLeaveWarRoom} />
-
-        {/* Full-bleed 60 FPS Game Canvas */}
-        <GameCanvas map={selectedMap} />
-
-        {/* Match Victory / Defeat Modal */}
-        <GameOverModal onLeaveMatch={handleExitActiveBattle} />
-      </div>
-    </Suspense>
+    <>
+      {content}
+      <IOSInstallModal />
+      {screen !== 'in_game' && <PwaUpdateBanner />}
+    </>
   );
 };
 

@@ -9,6 +9,7 @@ import { sounds } from "../audio/soundEngine";
 import { useCTFStore } from "../ctf/ctfStore";
 import type { MatchRulesConfig, Team } from "../ctf/types";
 import { RoomQRCodeModal } from "../ui/RoomQRCodeModal";
+import { isNativeShareSupported, shareRoomInvite } from "../pwa";
 import { VoiceMicButton, WarRoomCommsPanel } from "../comms/CommsPanel";
 import { DropBayStageCanvas } from "./warRoom/DropBayStageCanvas";
 import { MapSchematicPreview } from "./warRoom/MapSchematicPreview";
@@ -37,6 +38,7 @@ import {
   QrCode,
   RefreshCw,
   Rocket,
+  Share2,
   SlidersHorizontal,
   Users,
   Volume2,
@@ -145,6 +147,17 @@ export function WarRoomScreen({
           // ignore clipboard permission rejections
         });
     }
+  };
+
+  const handleNativeShare = () => {
+    sounds.playUiClick();
+    if (!roomCode) return;
+    void shareRoomInvite(roomCode).then((result) => {
+      if (result === "copied") {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
+    });
   };
 
   const handleSelectTeam = (newTeam: Team) => {
@@ -283,6 +296,19 @@ export function WarRoomScreen({
                     {copied ? "Copied!" : "Copy Link"}
                   </span>
                 </button>
+
+                {isNativeShareSupported() && (
+                  <button
+                    type="button"
+                    onClick={handleNativeShare}
+                    className="flex items-center gap-1.5 p-1.5 sm:px-3 sm:py-2 bg-slate-950/85 hover:bg-slate-900 border border-cyan-500/40 hover:border-cyan-400 text-cyan-200 hover:text-white text-[10px] sm:text-xs font-mono font-bold uppercase tracking-wider transition cursor-pointer clip-chamfer"
+                    title="Share Invite via System Sheet"
+                    aria-label="Share Invite"
+                  >
+                    <Share2 className="w-3.5 h-3.5 text-cyan-400" />
+                    <span className="hidden lg:inline">Share</span>
+                  </button>
+                )}
 
                 <button
                   type="button"

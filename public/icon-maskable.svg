@@ -1,0 +1,164 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Deep Orbital Obsidian Backdrop -->
+    <radialGradient id="spaceBg" cx="50%" cy="42%" r="70%">
+      <stop offset="0%" stop-color="#0f254a"/>
+      <stop offset="52%" stop-color="#081229"/>
+      <stop offset="100%" stop-color="#050812"/>
+    </radialGradient>
+
+    <!-- Ambient Cyan & Crimson Rim Glows -->
+    <radialGradient id="cyanAura" cx="48%" cy="46%" r="44%">
+      <stop offset="0%" stop-color="#00f0ff" stop-opacity="0.34"/>
+      <stop offset="55%" stop-color="#0284c7" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#050812" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="crimsonAura" cx="72%" cy="28%" r="36%">
+      <stop offset="0%" stop-color="#ff0055" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#050812" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="armorGrad" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#334155"/>
+      <stop offset="45%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0b1222"/>
+    </linearGradient>
+
+    <linearGradient id="helmetHighlight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#00f0ff"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+
+    <linearGradient id="visorGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="35%" stop-color="#67e8f9"/>
+      <stop offset="100%" stop-color="#00d8ff"/>
+    </linearGradient>
+
+    <linearGradient id="flagGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff2e7a"/>
+      <stop offset="100%" stop-color="#e11d48"/>
+    </linearGradient>
+
+    <linearGradient id="flameOuter" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="38%" stop-color="#f59e0b"/>
+      <stop offset="80%" stop-color="#f43f5e"/>
+      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>
+    </linearGradient>
+
+    <linearGradient id="flameCore" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="45%" stop-color="#7dd3fc"/>
+      <stop offset="100%" stop-color="#fde047" stop-opacity="0"/>
+    </linearGradient>
+
+    <filter id="neonGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- 100% Full-Bleed Background (Safe for all Adaptive / Maskable Icon Masks) -->
+  <rect width="512" height="512" fill="url(#spaceBg)"/>
+  <rect width="512" height="512" fill="url(#cyanAura)"/>
+  <rect width="512" height="512" fill="url(#crimsonAura)"/>
+
+  <!-- Subtle Tactical Orbital Grid -->
+  <g stroke="#00f0ff" stroke-opacity="0.08" stroke-width="1.5">
+    <line x1="0" y1="128" x2="512" y2="128"/>
+    <line x1="0" y1="256" x2="512" y2="256"/>
+    <line x1="0" y1="384" x2="512" y2="384"/>
+    <line x1="128" y1="0" x2="128" y2="512"/>
+    <line x1="256" y1="0" x2="256" y2="512"/>
+    <line x1="384" y1="0" x2="384" y2="512"/>
+  </g>
+
+  <!-- Central Emblem scaled comfortably inside the 80% Maskable Safe Zone -->
+  <g transform="translate(256 256) scale(0.80) translate(-256 -256)">
+    <!-- Outer HUD Targeting Ring -->
+    <circle cx="256" cy="248" r="186" fill="none" stroke="#00f0ff" stroke-width="2.5" stroke-opacity="0.22" stroke-dasharray="18 14"/>
+    <circle cx="256" cy="248" r="154" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-opacity="0.18"/>
+
+    <!-- Cardinal Reticle Ticks -->
+    <g stroke="#00f0ff" stroke-width="5" stroke-linecap="round" opacity="0.75">
+      <line x1="256" y1="48" x2="256" y2="76"/>
+      <line x1="256" y1="420" x2="256" y2="444"/>
+      <line x1="56" y1="248" x2="84" y2="248"/>
+      <line x1="428" y1="248" x2="456" y2="248"/>
+    </g>
+
+    <!-- Swept Exo-Wings / Jetpack Wings Behind Pilot -->
+    <path d="M188 232 L82 174 L112 248 L178 278 Z" fill="#0f172a" stroke="#00f0ff" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M168 236 L104 198 L122 240 L166 262 Z" fill="#00f0ff" fill-opacity="0.2"/>
+    <path d="M324 232 L430 174 L400 248 L334 278 Z" fill="#0f172a" stroke="#00f0ff" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M344 236 L408 198 L390 240 L346 262 Z" fill="#00f0ff" fill-opacity="0.2"/>
+
+    <!-- Symmetric Twin Jetpack Thruster Flames (Smooth & Sharp) -->
+    <g filter="url(#softGlow)">
+      <path d="M168 318 L208 318 L188 432 Z" fill="url(#flameOuter)"/>
+      <path d="M304 318 L344 318 L324 432 Z" fill="url(#flameOuter)"/>
+    </g>
+    <path d="M177 318 L199 318 L188 394 Z" fill="url(#flameCore)"/>
+    <path d="M313 318 L335 318 L324 394 Z" fill="url(#flameCore)"/>
+
+    <!-- Twin Jetpack Thruster Pods -->
+    <rect x="162" y="218" width="52" height="102" rx="14" fill="#0f172a" stroke="#38bdf8" stroke-width="4"/>
+    <rect x="172" y="232" width="12" height="58" rx="5" fill="#00f0ff" fill-opacity="0.65"/>
+    <rect x="166" y="308" width="44" height="14" rx="4" fill="#334155" stroke="#64748b" stroke-width="2"/>
+
+    <rect x="298" y="218" width="52" height="102" rx="14" fill="#0f172a" stroke="#38bdf8" stroke-width="4"/>
+    <rect x="328" y="232" width="12" height="58" rx="5" fill="#00f0ff" fill-opacity="0.65"/>
+    <rect x="302" y="308" width="44" height="14" rx="4" fill="#334155" stroke="#64748b" stroke-width="2"/>
+
+    <!-- Armored Torso Shoulders / Chestplate -->
+    <path d="M178 274 C178 242 210 226 256 226 C302 226 334 242 334 274 L322 330 C318 346 302 356 282 356 L230 356 C210 356 194 346 190 330 Z"
+          fill="url(#armorGrad)" stroke="url(#helmetHighlight)" stroke-width="5" stroke-linejoin="round"/>
+    <!-- Chest Core Reactor -->
+    <polygon points="256,282 276,304 256,326 236,304" fill="#060913" stroke="#00f0ff" stroke-width="3.5"/>
+    <polygon points="256,291 267,304 256,317 245,304" fill="#00f0ff" filter="url(#neonGlow)"/>
+
+    <!-- Heroic Exo-Helmet Shell -->
+    <circle cx="256" cy="196" r="84" fill="#0b1326" stroke="url(#helmetHighlight)" stroke-width="6" filter="url(#neonGlow)"/>
+    <circle cx="256" cy="196" r="78" fill="url(#armorGrad)"/>
+
+    <!-- Helmet Crest Ridge -->
+    <path d="M238 116 L274 116 L266 158 L246 158 Z" fill="#1e293b" stroke="#00f0ff" stroke-width="3" stroke-linejoin="round"/>
+    <line x1="256" y1="122" x2="256" y2="152" stroke="#00f0ff" stroke-width="4" stroke-linecap="round"/>
+
+    <!-- Glowing Angular Cyber Visor -->
+    <path d="M198 184 L314 184 C320 184 323 190 321 196 L310 222 C306 230 296 234 284 234 L228 234 C216 234 206 230 202 222 L191 196 C189 190 192 184 198 184 Z"
+          fill="#060913" stroke="#0f172a" stroke-width="4"/>
+    <path d="M204 190 L308 190 L299 218 C296 224 289 227 280 227 L232 227 C223 227 216 224 213 218 Z"
+          fill="url(#visorGrad)" filter="url(#neonGlow)"/>
+    <!-- Visor Glint Slash -->
+    <polygon points="218,195 256,195 240,221 215,221" fill="#ffffff" fill-opacity="0.55"/>
+
+    <!-- Chin Guard / Tactical Respirator -->
+    <path d="M214 236 L298 236 L284 266 L228 266 Z" fill="#0f172a" stroke="#38bdf8" stroke-width="3" stroke-linejoin="round"/>
+    <line x1="242" y1="246" x2="242" y2="258" stroke="#00f0ff" stroke-width="3" stroke-linecap="round"/>
+    <line x1="256" y1="245" x2="256" y2="259" stroke="#00f0ff" stroke-width="3" stroke-linecap="round"/>
+    <line x1="270" y1="246" x2="270" y2="258" stroke="#00f0ff" stroke-width="3" stroke-linecap="round"/>
+
+    <!-- CTF Neon Crimson Battle Flag Emblem (Upper-Right Shoulder Mount) -->
+    <g transform="translate(358, 92)">
+      <path d="M6 12 L84 44 L6 76 Z" fill="url(#flagGrad)" filter="url(#neonGlow)"/>
+      <path d="M12 22 L64 44 L12 66 Z" fill="#ff7aa8" fill-opacity="0.35"/>
+      <line x1="4" y1="4" x2="4" y2="112" stroke="#f8fafc" stroke-width="7" stroke-linecap="round"/>
+      <circle cx="4" cy="4" r="6" fill="#00f0ff"/>
+    </g>
+  </g>
+</svg>
