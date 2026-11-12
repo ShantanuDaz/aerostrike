@@ -15,7 +15,6 @@ import {
 } from '../controls/mobileFullscreen';
 import { sounds } from '../audio/soundEngine';
 import {
-  Crosshair,
   Eye,
   LogOut,
   Maximize,
@@ -62,11 +61,9 @@ export function InGameMenuModal({
   const cameraZoom = useSettingsStore((s) => s.cameraZoom);
   const hudScale = useSettingsStore((s) => s.hudScale);
   const highContrastTeamMarkers = useSettingsStore((s) => s.highContrastTeamMarkers);
-  const touchAimMode = useSettingsStore((s) => s.touchAimMode);
   const touchLayout = useSettingsStore((s) => s.touchLayout);
   const touchAimLine = useSettingsStore((s) => s.touchAimLine);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
-  const showTouchBoostButton = useSettingsStore((s) => s.showTouchBoostButton);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const toggleMute = useSettingsStore((s) => s.toggleMute);
 
@@ -320,43 +317,24 @@ export function InGameMenuModal({
                 <span>Touch Ergonomics</span>
               </div>
 
+              <button
+                type="button"
+                onClick={() => {
+                  sounds.playUiClick();
+                  updateSettings({
+                    touchLayout:
+                      touchLayout === 'right_handed' ? 'left_handed' : 'right_handed',
+                  });
+                }}
+                className="flex flex-col items-start px-2.5 py-1.5 bg-slate-900 border border-slate-700 hover:border-cyan-400/50 clip-chamfer text-left cursor-pointer"
+              >
+                <span className="text-[8px] font-mono uppercase text-slate-400">Thumb Layout</span>
+                <span className="text-[10px] font-mono font-black text-white uppercase">
+                  {touchLayout === 'left_handed' ? 'Left-Handed' : 'Right-Handed'}
+                </span>
+              </button>
+
               <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    sounds.playUiClick();
-                    updateSettings({
-                      touchAimMode: touchAimMode === 'instant' ? 'precision' : 'instant',
-                    });
-                  }}
-                  className="flex flex-col items-start px-2.5 py-1.5 bg-slate-900 border border-slate-700 hover:border-cyan-400/50 clip-chamfer text-left cursor-pointer"
-                >
-                  <span className="text-[8px] font-mono uppercase text-slate-400">Aim Fire Mode</span>
-                  <span className="text-[10px] font-mono font-black text-cyan-300 uppercase flex items-center gap-1">
-                    <Crosshair className="w-3 h-3" />
-                    {touchAimMode === 'precision' ? 'Precision' : 'Instant'}
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    sounds.playUiClick();
-                    updateSettings({
-                      touchLayout:
-                        touchLayout === 'right_handed' ? 'left_handed' : 'right_handed',
-                    });
-                  }}
-                  className="flex flex-col items-start px-2.5 py-1.5 bg-slate-900 border border-slate-700 hover:border-cyan-400/50 clip-chamfer text-left cursor-pointer"
-                >
-                  <span className="text-[8px] font-mono uppercase text-slate-400">Thumb Layout</span>
-                  <span className="text-[10px] font-mono font-black text-white uppercase">
-                    {touchLayout === 'left_handed' ? 'Left-Handed' : 'Right-Handed'}
-                  </span>
-                </button>
-              </div>
-
-              <div className="grid grid-cols-3 gap-1.5">
                 <button
                   type="button"
                   onClick={() => {
@@ -370,20 +348,6 @@ export function InGameMenuModal({
                   }`}
                 >
                   Laser: {touchAimLine ? 'ON' : 'OFF'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    sounds.playUiClick();
-                    updateSettings({ showTouchBoostButton: !showTouchBoostButton });
-                  }}
-                  className={`px-2 py-1.5 text-[9px] font-mono font-bold uppercase clip-chamfer border cursor-pointer ${
-                    showTouchBoostButton
-                      ? 'bg-cyan-500/15 border-cyan-400/60 text-cyan-200'
-                      : 'bg-slate-900 border-slate-800 text-slate-400'
-                  }`}
-                >
-                  Boost Btn: {showTouchBoostButton ? 'ON' : 'OFF'}
                 </button>
                 <button
                   type="button"

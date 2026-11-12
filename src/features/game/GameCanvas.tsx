@@ -507,7 +507,7 @@ export function GameCanvas({ map }: GameCanvasProps) {
         }`}
       />
       <MinimapView map={map} />
-      <VirtualControls onFire={handleFire} onSwitchWeapon={handleSwitchWeapon} />
+      <VirtualControls onSwitchWeapon={handleSwitchWeapon} />
     </div>
   );
 }

@@ -727,7 +727,7 @@ export function stepSoloBots(params: {
     if (!nextPlayer.isDead && matchStatus === 'playing') {
       if (enemyFlag.status !== 'carried') {
         const dEnemy = Math.hypot(nextPlayer.x - enemyFlag.x, nextPlayer.y - enemyFlag.y);
-        if (dEnemy < nextPlayer.radius + 20) {
+        if (dEnemy < nextPlayer.radius + 24) {
           flagEvents.push({
             action: 'pickup',
             team: enemyTeam,
@@ -739,7 +739,7 @@ export function stepSoloBots(params: {
 
       if (friendlyFlag.status === 'dropped') {
         const dFriendly = Math.hypot(nextPlayer.x - friendlyFlag.x, nextPlayer.y - friendlyFlag.y);
-        if (dFriendly < nextPlayer.radius + 20) {
+        if (dFriendly < nextPlayer.radius + 24) {
           flagEvents.push({
             action: 'return',
             team: friendlyTeam,
@@ -754,7 +754,7 @@ export function stepSoloBots(params: {
           nextPlayer.x - friendlyFlag.baseX,
           nextPlayer.y - friendlyFlag.baseY,
         );
-        if (dBase < 42) {
+        if (dBase < 66) {
           flagEvents.push({
             action: 'capture',
             team: friendlyTeam,

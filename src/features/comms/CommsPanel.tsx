@@ -446,7 +446,7 @@ export function HudCommsOverlay({ isTouchHUD }: HudCommsOverlayProps) {
       }
       className={
         isTouchHUD
-          ? 'fixed bottom-2.5 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-1.5 pointer-events-none max-w-[90vw]'
+          ? 'fixed bottom-[140px] min-[540px]:bottom-2.5 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-1.5 pointer-events-none max-w-[90vw]'
           : 'fixed bottom-3 left-3 z-30 flex flex-col items-start gap-1.5 pointer-events-none w-[290px] sm:w-[320px]'
       }
     >

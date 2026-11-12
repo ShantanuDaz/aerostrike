@@ -1,10 +1,6 @@
 import { Keyboard, Smartphone, Vibrate, Zap } from 'lucide-react';
 import { sounds } from '../../audio/soundEngine';
-import {
-  type TouchAimMode,
-  type TouchLayout,
-  useSettingsStore,
-} from '../../settings/settingsStore';
+import { type TouchLayout, useSettingsStore } from '../../settings/settingsStore';
 
 export function ControlsIntelTab() {
   const settings = useSettingsStore();
@@ -26,73 +22,38 @@ export function ControlsIntelTab() {
           <Smartphone className="w-4 h-4" /> Mobile &amp; Touch Ergonomics
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-          {/* Aim Fire Mode */}
-          <div className="space-y-1.5">
-            <div className="text-xs font-bold text-white">Right Stick Aim Style</div>
-            <p className="text-[11px] text-slate-400 leading-snug">
-              Precision Mode aims cleanly without firing until you push past the outer ring or release.
-            </p>
-            <div className="grid grid-cols-2 gap-1.5 pt-1">
-              {(
-                [
-                  { id: 'instant', label: 'Instant Fire' },
-                  { id: 'precision', label: 'Precision Aim' },
-                ] as { id: TouchAimMode; label: string }[]
-              ).map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => {
-                    sounds.playUiClick();
-                    settings.updateSettings({ touchAimMode: opt.id });
-                  }}
-                  className={`py-2 px-2 text-[11px] font-mono font-bold uppercase border clip-chamfer cursor-pointer transition ${
-                    settings.touchAimMode === opt.id
-                      ? 'bg-cyan-500/25 border-cyan-400 text-white'
-                      : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Stick Handedness */}
-          <div className="space-y-1.5">
-            <div className="text-xs font-bold text-white">Thumb Cluster Handedness</div>
-            <p className="text-[11px] text-slate-400 leading-snug">
-              Swap virtual move &amp; aim screen halves plus action buttons to match left-handed grip.
-            </p>
-            <div className="grid grid-cols-2 gap-1.5 pt-1">
-              {(
-                [
-                  { id: 'right_handed', label: 'Right-Handed' },
-                  { id: 'left_handed', label: 'Left-Handed' },
-                ] as { id: TouchLayout; label: string }[]
-              ).map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => {
-                    sounds.playUiClick();
-                    settings.updateSettings({ touchLayout: opt.id });
-                  }}
-                  className={`py-2 px-2 text-[11px] font-mono font-bold uppercase border clip-chamfer cursor-pointer transition ${
-                    settings.touchLayout === opt.id
-                      ? 'bg-cyan-500/25 border-cyan-400 text-white'
-                      : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+        <div className="space-y-1.5">
+          <div className="text-xs font-bold text-white">Thumb Cluster Handedness</div>
+          <p className="text-[11px] text-slate-400 leading-snug">
+            Swap the fixed bottom-corner Move &amp; Aim pads plus action buttons to match left-handed grip.
+          </p>
+          <div className="grid grid-cols-2 gap-1.5 pt-1">
+            {(
+              [
+                { id: 'right_handed', label: 'Right-Handed' },
+                { id: 'left_handed', label: 'Left-Handed' },
+              ] as { id: TouchLayout; label: string }[]
+            ).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => {
+                  sounds.playUiClick();
+                  settings.updateSettings({ touchLayout: opt.id });
+                }}
+                className={`py-2 px-2 text-[11px] font-mono font-bold uppercase border clip-chamfer cursor-pointer transition ${
+                  settings.touchLayout === opt.id
+                    ? 'bg-cyan-500/25 border-cyan-400 text-white'
+                    : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-slate-800/80">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-slate-800/80">
           <button
             type="button"
             onClick={() => {
@@ -108,26 +69,6 @@ export function ControlsIntelTab() {
             <span className="text-[11px] font-mono font-bold uppercase">Aim Laser Line</span>
             <span className="text-[10px] font-mono font-black">
               {settings.touchAimLine ? 'ON' : 'OFF'}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              sounds.playUiClick();
-              settings.updateSettings({
-                showTouchBoostButton: !settings.showTouchBoostButton,
-              });
-            }}
-            className={`flex items-center justify-between gap-2 px-3 py-2 border clip-chamfer text-left cursor-pointer transition ${
-              settings.showTouchBoostButton
-                ? 'bg-cyan-500/15 border-cyan-400/70 text-cyan-200'
-                : 'bg-slate-900/80 border-slate-800 text-slate-400'
-            }`}
-          >
-            <span className="text-[11px] font-mono font-bold uppercase">Boost Button</span>
-            <span className="text-[10px] font-mono font-black">
-              {settings.showTouchBoostButton ? 'ON' : 'OFF'}
             </span>
           </button>
 
@@ -192,10 +133,10 @@ export function ControlsIntelTab() {
           </div>
           <ul className="space-y-2 text-xs text-slate-300 list-disc list-inside">
             <li>
-              <strong className="text-white">Move Stick:</strong> Drag horizontally to strafe, pull up to boost, push down to drop through ledges.
+              <strong className="text-white">Fixed Move Stick:</strong> Anchored in the bottom corner — drag left/right to strafe, pull up to fire your jetpack boost, or push down to drop through platforms.
             </li>
             <li>
-              <strong className="text-white">Aim Stick:</strong> Aims 360° with an optional laser sightline; choose Instant Fire or Precision Aim above.
+              <strong className="text-white">Fixed Aim &amp; Shoot Stick:</strong> Anchored in the opposite bottom corner — move the inner joystick inside the circle to aim 360° without firing, and push it to the outer circle perimeter to shoot.
             </li>
             <li>
               <strong className="text-white">Radar Zoom Pill (− / Auto / +):</strong> Zooms the camera out immediately for wide situational awareness on small screens.

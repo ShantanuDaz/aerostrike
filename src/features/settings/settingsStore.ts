@@ -55,11 +55,11 @@ export const DEFAULT_SETTINGS: GameSettings = {
   cameraZoom: DEFAULT_CAMERA_ZOOM,
   hudScale: 'standard',
   highContrastTeamMarkers: false,
-  touchAimMode: 'instant',
+  touchAimMode: 'precision',
   touchLayout: 'right_handed',
   touchAimLine: true,
   hapticsEnabled: true,
-  showTouchBoostButton: true,
+  showTouchBoostButton: false,
 };
 
 const VALID_RADAR_MODES: DefaultRadarMode[] = ['compact', 'expanded', 'hidden'];

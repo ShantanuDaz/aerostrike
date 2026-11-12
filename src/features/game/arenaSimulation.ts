@@ -50,6 +50,7 @@ export interface ArenaSimState {
   lastPrevBoosting: boolean;
   lastPrevGrounded: boolean;
   lastFlagClaimMs: number;
+  lastBlockedCapNoticeMs: number;
   wasPlayingLastFrame: boolean;
   wasSoloPaused: boolean;
   prevBotDashing: Set<string>;
@@ -70,6 +71,7 @@ export function createArenaSimState(): ArenaSimState {
     lastPrevBoosting: false,
     lastPrevGrounded: false,
     lastFlagClaimMs: 0,
+    lastBlockedCapNoticeMs: 0,
     wasPlayingLastFrame: true,
     wasSoloPaused: false,
     prevBotDashing: new Set(),
@@ -593,7 +595,45 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
   engineWorld.particles = updateParticles(engineWorld.particles, dt);
 
   // 6. CTF OBJECTIVE TRIGGERS & PICKUPS/STATIONS (Active combat only)
+  if (isMatchPlaying && isMultiplayer && isAuthoritativeCTF) {
+    const ctfFlags = useCTFStore.getState().flags;
+    const roster = useNetworkStore.getState().roster;
+    for (const team of ['blue', 'red'] as Team[]) {
+      const fl = ctfFlags[team];
+      if (fl.status !== 'carried' || !fl.carrierId || fl.carrierId === myPlayerId) {
+        continue;
+      }
+      const rp = engineWorld.remotePlayers.get(fl.carrierId);
+      const member = roster[fl.carrierId];
+      if (rp?.isDead) {
+        ctfStore.dropFlag(team, rp.renderX, rp.renderY);
+      } else if (!member || !member.isOnline) {
+        ctfStore.dropFlag(team, fl.x, fl.y);
+      }
+    }
+  }
+
   const latestLocal = engineWorld.localPlayer ?? latestPlayer;
+  if (isMatchPlaying && latestLocal.isDead && isMultiplayer && !isAuthoritativeCTF) {
+    const latestCTF = useCTFStore.getState();
+    const enemyTeam: Team = latestLocal.team === 'blue' ? 'red' : 'blue';
+    const enemyFlag = latestCTF.flags[enemyTeam];
+    if (
+      enemyFlag.status === 'carried' &&
+      enemyFlag.carrierId === myPlayerId &&
+      timestamp - simState.lastFlagClaimMs > 200
+    ) {
+      simState.lastFlagClaimMs = timestamp;
+      networkManager.broadcastFlagEvent({
+        action: 'drop',
+        team: enemyTeam,
+        carrierId: myPlayerId,
+        x: latestLocal.x,
+        y: latestLocal.y,
+      });
+    }
+  }
+
   if (isMatchPlaying && !latestLocal.isDead) {
     const latestCTF = useCTFStore.getState();
     const enemyTeam: Team = latestLocal.team === 'blue' ? 'red' : 'blue';
@@ -607,7 +647,7 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
         latestLocal.x - enemyFlag.x,
         latestLocal.y - enemyFlag.y,
       );
-      if (distToEnemyFlag < latestLocal.radius + 20) {
+      if (distToEnemyFlag < latestLocal.radius + 24) {
         if (isAuthoritativeCTF) {
           if (ctfStore.pickupFlag(enemyTeam, localActorId)) {
             latestLocal.carryingFlag = true;
@@ -631,7 +671,7 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
         latestLocal.x - friendlyFlag.x,
         latestLocal.y - friendlyFlag.y,
       );
-      if (distToFriendlyFlag < latestLocal.radius + 20) {
+      if (distToFriendlyFlag < latestLocal.radius + 24) {
         if (isAuthoritativeCTF) {
           if (ctfStore.returnFlag(friendlyTeam)) {
             hapticFlagEvent();
@@ -647,26 +687,41 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
       }
     }
 
-    if (latestLocal.carryingFlag && friendlyFlag.status === 'at_base') {
+    if (latestLocal.carryingFlag) {
       const distToBase = Math.hypot(
         latestLocal.x - friendlyFlag.baseX,
         latestLocal.y - friendlyFlag.baseY,
       );
-      if (distToBase < 42) {
-        if (isAuthoritativeCTF) {
-          if (ctfStore.captureFlag(friendlyTeam, latestLocal.avatar.callsign, localActorId)) {
-            latestLocal.carryingFlag = false;
+      if (distToBase < 66) {
+        if (friendlyFlag.status === 'at_base') {
+          if (isAuthoritativeCTF) {
+            if (ctfStore.captureFlag(friendlyTeam, latestLocal.avatar.callsign, localActorId)) {
+              latestLocal.carryingFlag = false;
+              hapticFlagEvent();
+              networkManager.notifyLocalStateChanged();
+            }
+          } else if (timestamp - simState.lastFlagClaimMs > 120) {
+            simState.lastFlagClaimMs = timestamp;
             hapticFlagEvent();
-            networkManager.notifyLocalStateChanged();
+            networkManager.broadcastFlagEvent({
+              action: 'capture',
+              team: friendlyTeam,
+              carrierId: myPlayerId,
+            });
           }
-        } else if (timestamp - simState.lastFlagClaimMs > 120) {
-          simState.lastFlagClaimMs = timestamp;
-          hapticFlagEvent();
-          networkManager.broadcastFlagEvent({
-            action: 'capture',
-            team: friendlyTeam,
-            carrierId: myPlayerId,
-          });
+        } else if (timestamp - simState.lastBlockedCapNoticeMs > 2400) {
+          simState.lastBlockedCapNoticeMs = timestamp;
+          const blockedMsg =
+            friendlyFlag.status === 'carried'
+              ? 'OWN FLAG STOLEN — RECOVER TO SCORE!'
+              : 'RETURN DROPPED FLAG TO SCORE!';
+          engineWorld.addFloatingText(
+            friendlyFlag.baseX,
+            friendlyFlag.baseY - 34,
+            blockedMsg,
+            '#fbbf24',
+            0.95,
+          );
         }
       }
     }

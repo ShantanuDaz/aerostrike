@@ -357,9 +357,25 @@ export function HUD({ onExitToWarRoom, onAbortRoom }: HUDProps) {
               </div>
 
               {player.carryingFlag && (
-                <div className="bg-amber-950/90 border border-amber-400/70 text-amber-200 px-2 py-0.5 text-[10px] font-mono font-black uppercase tracking-wider clip-chamfer flex items-center gap-1.5 glow-amber animate-pulse pointer-events-none">
-                  <Flag className="w-3 h-3 text-amber-300 shrink-0" />
-                  <span>Flag Secured • Return to Base</span>
+                <div
+                  className={`px-2 py-0.5 text-[10px] font-mono font-black uppercase tracking-wider clip-chamfer flex items-center gap-1.5 animate-pulse pointer-events-none border ${
+                    flags[player.team].status === 'at_base'
+                      ? 'bg-amber-950/90 border-amber-400/70 text-amber-200 glow-amber'
+                      : 'bg-rose-950/90 border-rose-400/75 text-rose-200 glow-red'
+                  }`}
+                >
+                  <Flag
+                    className={`w-3 h-3 shrink-0 ${
+                      flags[player.team].status === 'at_base' ? 'text-amber-300' : 'text-rose-300'
+                    }`}
+                  />
+                  <span>
+                    {flags[player.team].status === 'at_base'
+                      ? 'Flag Secured • Return to Base'
+                      : flags[player.team].status === 'carried'
+                        ? 'Own Flag Stolen • Recover Flag to Score'
+                        : `Own Flag Dropped (${Math.max(1, Math.ceil(flags[player.team].returnTimer))}s) • Return to Score`}
+                  </span>
                 </div>
               )}
 
