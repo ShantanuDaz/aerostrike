@@ -6,6 +6,7 @@ export const defaultMap: GameMap = {
   width: 900,
   height: 600,
   backgroundColor: '#1a1f26',
+  theme: 'training_deck',
   baseBlue: { x: 50, y: 450, width: 120, height: 110 },
   baseRed: { x: 730, y: 450, width: 120, height: 110 },
   flagBlue: { x: 100, y: 480 },
@@ -62,6 +63,40 @@ export const defaultMap: GameMap = {
       height: 18,
       color: '#4a5568',
       type: 'platform',
+    },
+  ],
+
+  terrainShapes: [
+    // Symmetrical Curved Training Speed-Ramps
+    {
+      kind: 'spline_floor',
+      id: 'def-curve-left',
+      type: 'ground',
+      style: 'alloy',
+      color: '#2d3748',
+      trimColor: '#38bdf8',
+      bottomY: 560,
+      samples: 14,
+      topPoints: [
+        { x: 325, y: 560 },
+        { x: 365, y: 530 },
+        { x: 405, y: 560 },
+      ],
+    },
+    {
+      kind: 'spline_floor',
+      id: 'def-curve-right',
+      type: 'ground',
+      style: 'alloy',
+      color: '#2d3748',
+      trimColor: '#38bdf8',
+      bottomY: 560,
+      samples: 14,
+      topPoints: [
+        { x: 495, y: 560 },
+        { x: 535, y: 530 },
+        { x: 575, y: 560 },
+      ],
     },
   ],
 };

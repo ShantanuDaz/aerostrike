@@ -22,6 +22,34 @@ export function createSparks(x: number, y: number, count: number = 6, color: str
   return particles;
 }
 
+export function createDirectionalSparks(
+  x: number,
+  y: number,
+  nx: number,
+  ny: number,
+  count: number = 7,
+  color: string = '#fbbf24',
+): Particle[] {
+  const baseAngle = Math.atan2(ny, nx);
+  const particles: Particle[] = [];
+  for (let i = 0; i < count; i++) {
+    const angle = baseAngle + (Math.random() - 0.5) * 1.65;
+    const speed = 1.8 + Math.random() * 3.8;
+    particles.push({
+      id: `p_${nextParticleId++}`,
+      x,
+      y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      radius: 1.3 + Math.random() * 1.4,
+      color,
+      alpha: 1,
+      decay: 0.045 + Math.random() * 0.03,
+    });
+  }
+  return particles;
+}
+
 export function createExplosionParticles(x: number, y: number, count: number = 24): Particle[] {
   const particles: Particle[] = [];
   const colors = ['#ef4444', '#f97316', '#fbbf24', '#71717a'];

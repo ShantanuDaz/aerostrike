@@ -8,7 +8,7 @@ import {
   type Player,
   type RagdollInstance,
 } from '../player';
-import { updateCamera, type Camera } from '../camera';
+import { computeAutoCameraZoom, updateCamera, type Camera } from '../camera';
 import {
   updateBullets,
   updateParticles,
@@ -28,6 +28,7 @@ import { networkManager } from '../network/peerRoom';
 import { useAvatarStore } from '../avatar/avatarStore';
 import { sounds } from '../audio/soundEngine';
 import { useSettingsStore } from '../settings/settingsStore';
+import { hapticDash, hapticFlagEvent, hapticPickup } from '../controls/haptics';
 import { engineWorld } from './engineWorld';
 import { stepSoloBots } from './botAI';
 import {
@@ -50,6 +51,7 @@ export interface ArenaSimState {
   lastPrevGrounded: boolean;
   lastFlagClaimMs: number;
   wasPlayingLastFrame: boolean;
+  wasSoloPaused: boolean;
   prevBotDashing: Set<string>;
   prevBotBouncing: Set<string>;
   targetPlayersBuf: TargetPlayer[];
@@ -69,6 +71,7 @@ export function createArenaSimState(): ArenaSimState {
     lastPrevGrounded: false,
     lastFlagClaimMs: 0,
     wasPlayingLastFrame: true,
+    wasSoloPaused: false,
     prevBotDashing: new Set(),
     prevBotBouncing: new Set(),
     targetPlayersBuf: [],
@@ -104,6 +107,13 @@ export interface StepArenaFrameResult {
   currentCamera: Camera;
 }
 
+function resolveDesiredCameraZoom(viewW: number, viewH: number): number {
+  const settings = useSettingsStore.getState();
+  return settings.cameraZoomMode === 'custom'
+    ? settings.cameraZoom
+    : computeAutoCameraZoom(viewW, viewH);
+}
+
 export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResult {
   const {
     map,
@@ -129,9 +139,53 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
   const playerStore = usePlayerStore.getState();
   const ctfStore = useCTFStore.getState();
   const networkStore = useNetworkStore.getState();
+  const statsStore = useMatchStatsStore.getState();
   const myPlayerId = useAvatarStore.getState().playerId;
   const isMultiplayer = Boolean(networkStore.roomCode);
   const isAuthoritativeCTF = !isMultiplayer || networkStore.isHost;
+  const isSoloPaused = !isMultiplayer && statsStore.tacticalMenuOpen;
+
+  // Smooth zoom convergence (works both live and while previewing zoom in Tactical Pause menu)
+  const desiredZoom = resolveDesiredCameraZoom(viewW, viewH);
+  const prevZoom = cameraRef.current.zoom > 0 ? cameraRef.current.zoom : desiredZoom;
+  const zoomLerp = needsCameraSnapRef.current ? 1.0 : 1 - Math.pow(1 - 0.18, dt * 60);
+  const nextZoom =
+    Math.abs(desiredZoom - prevZoom) < 0.002
+      ? desiredZoom
+      : prevZoom + (desiredZoom - prevZoom) * zoomLerp;
+
+  // Handle Solo Tactical Pause (freeze solo AI, player physics, bullets, and match clock cleanly)
+  if (isSoloPaused) {
+    if (!simState.wasSoloPaused) {
+      clearAllInputs();
+    }
+    simState.wasSoloPaused = true;
+
+    const currentLocal = engineWorld.localPlayer ?? playerStore.player;
+    const pausedCamera = updateCamera(
+      {
+        ...cameraRef.current,
+        viewportWidth: viewW,
+        viewportHeight: viewH,
+        zoom: nextZoom,
+      },
+      currentLocal.x,
+      currentLocal.y,
+      map.width,
+      map.height,
+      1.0,
+    );
+    cameraRef.current = pausedCamera;
+
+    return {
+      localPlayer: currentLocal,
+      myPlayerId,
+      isBoostingNow: false,
+      isMultiplayer,
+      currentCamera: pausedCamera,
+    };
+  }
+  simState.wasSoloPaused = false;
 
   // Tick authoritative CTF match & round-reset timers first
   ctfStore.tickTimers(dt, isAuthoritativeCTF, isAuthoritativeCTF);
@@ -171,6 +225,7 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
     engineWorld.localPlayer = nextPlayer;
 
     if (!wasLocalDashing && (nextPlayer.dashActiveTimer ?? 0) > 0) {
+      hapticDash();
       const dashColor = nextPlayer.team === 'blue' ? '#38bdf8' : '#fb7185';
       engineWorld.addParticles(createSparks(nextPlayer.x, nextPlayer.y, 12, dashColor));
     }
@@ -181,6 +236,8 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
 
     if (wasLocalDead && !nextPlayer.isDead) {
       lastLocalAttackerRef.current = null;
+      needsCameraSnapRef.current = true;
+      useMatchStatsStore.getState().setLocalDeathSummary(null);
       useCombatStore.getState().initLoadout(useSettingsStore.getState().defaultWeapon);
     }
 
@@ -243,6 +300,12 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
         } else {
           useMatchStatsStore.getState().recordKill(hazardEvt);
         }
+        useMatchStatsStore.getState().setLocalDeathSummary({
+          killerCallsign: hazardEvt.killerCallsign,
+          killerTeam: hazardEvt.killerTeam,
+          weaponType: hazardEvt.weaponType,
+          atMs: Date.now(),
+        });
       }
 
       if (prevCarryingFlag) {
@@ -391,14 +454,68 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
     ragdollsRef.current = updateRagdolls(ragdollsRef.current, map, dt);
   }
 
-  // 4. UPDATE CAMERA (snaps cleanly on map / rematch reset)
-  const camLerp = needsCameraSnapRef.current ? 1.0 : 1 - Math.pow(1 - 0.14, dt * 60);
-  needsCameraSnapRef.current = false;
+  // 4. UPDATE CAMERA (snaps cleanly on respawn/reset, smoothly tracks teammate while spectating dead)
   const latestPlayer = engineWorld.localPlayer ?? nextPlayer;
+  let camTargetX = latestPlayer.x;
+  let camTargetY = latestPlayer.y;
+  let isSpectating = false;
+
+  if (latestPlayer.isDead) {
+    let bestSpecX = latestPlayer.x;
+    let bestSpecY = latestPlayer.y;
+    let bestPriority = -1;
+
+    const considerSpec = (
+      x: number,
+      y: number,
+      sameTeam: boolean,
+      carryingFlag: boolean,
+      isDead: boolean,
+    ) => {
+      if (isDead) return;
+      const prio = (sameTeam ? 10 : 0) + (carryingFlag ? 5 : 0);
+      if (prio > bestPriority) {
+        bestPriority = prio;
+        bestSpecX = x;
+        bestSpecY = y;
+      }
+    };
+
+    for (const rp of engineWorld.remotePlayers.values()) {
+      considerSpec(rp.renderX, rp.renderY, rp.team === latestPlayer.team, rp.carryingFlag, rp.isDead);
+    }
+    if (!isMultiplayer) {
+      for (let i = 0; i < engineWorld.soloBots.length; i++) {
+        const bot = engineWorld.soloBots[i];
+        considerSpec(
+          bot.player.x,
+          bot.player.y,
+          bot.team === latestPlayer.team,
+          bot.player.carryingFlag,
+          bot.player.isDead,
+        );
+      }
+    }
+
+    if (bestPriority >= 0) {
+      camTargetX = bestSpecX;
+      camTargetY = bestSpecY;
+      isSpectating = true;
+    }
+  }
+
+  const baseCamRate = isSpectating ? 0.08 : 0.14;
+  const camLerp = needsCameraSnapRef.current ? 1.0 : 1 - Math.pow(1 - baseCamRate, dt * 60);
+  needsCameraSnapRef.current = false;
   const currentCamera = updateCamera(
-    { ...cameraRef.current, viewportWidth: viewW, viewportHeight: viewH },
-    latestPlayer.x,
-    latestPlayer.y,
+    {
+      ...cameraRef.current,
+      viewportWidth: viewW,
+      viewportHeight: viewH,
+      zoom: nextZoom,
+    },
+    camTargetX,
+    camTargetY,
     map.width,
     map.height,
     camLerp,
@@ -476,7 +593,7 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
   engineWorld.particles = updateParticles(engineWorld.particles, dt);
 
   // 6. CTF OBJECTIVE TRIGGERS & PICKUPS/STATIONS (Active combat only)
-  const latestLocal = engineWorld.localPlayer ?? nextPlayer;
+  const latestLocal = engineWorld.localPlayer ?? latestPlayer;
   if (isMatchPlaying && !latestLocal.isDead) {
     const latestCTF = useCTFStore.getState();
     const enemyTeam: Team = latestLocal.team === 'blue' ? 'red' : 'blue';
@@ -494,10 +611,12 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
         if (isAuthoritativeCTF) {
           if (ctfStore.pickupFlag(enemyTeam, localActorId)) {
             latestLocal.carryingFlag = true;
+            hapticFlagEvent();
             networkManager.notifyLocalStateChanged();
           }
         } else if (timestamp - simState.lastFlagClaimMs > 120) {
           simState.lastFlagClaimMs = timestamp;
+          hapticFlagEvent();
           networkManager.broadcastFlagEvent({
             action: 'pickup',
             team: enemyTeam,
@@ -514,9 +633,12 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
       );
       if (distToFriendlyFlag < latestLocal.radius + 20) {
         if (isAuthoritativeCTF) {
-          ctfStore.returnFlag(friendlyTeam);
+          if (ctfStore.returnFlag(friendlyTeam)) {
+            hapticFlagEvent();
+          }
         } else if (timestamp - simState.lastFlagClaimMs > 120) {
           simState.lastFlagClaimMs = timestamp;
+          hapticFlagEvent();
           networkManager.broadcastFlagEvent({
             action: 'return',
             team: friendlyTeam,
@@ -534,10 +656,12 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
         if (isAuthoritativeCTF) {
           if (ctfStore.captureFlag(friendlyTeam, latestLocal.avatar.callsign, localActorId)) {
             latestLocal.carryingFlag = false;
+            hapticFlagEvent();
             networkManager.notifyLocalStateChanged();
           }
         } else if (timestamp - simState.lastFlagClaimMs > 120) {
           simState.lastFlagClaimMs = timestamp;
+          hapticFlagEvent();
           networkManager.broadcastFlagEvent({
             action: 'capture',
             team: friendlyTeam,
@@ -572,6 +696,7 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
         }
         useCombatStore.getState().grantWeaponPickup(pickup.weaponType);
         sounds.playFlagPickup();
+        hapticPickup();
         pickup.respawnTimer = 20;
         if (isMultiplayer) {
           networkManager.broadcastPickupCollected(pickup.id, pickup.weaponType);
@@ -616,6 +741,7 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
           postCtfLocal.health = healed;
           st.respawnTimer = st.cooldownSec;
           sounds.playRefill('medkit');
+          hapticPickup();
           engineWorld.addParticles(createSparks(st.x, st.y, 12, '#34d399'));
           engineWorld.addFloatingText(st.x, st.y - 16, `+${gainText} HP`, '#34d399', 1.05);
           if (isMultiplayer) {
@@ -638,6 +764,7 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
           postCtfLocal.dashCooldown = 0;
           st.respawnTimer = st.cooldownSec;
           sounds.playRefill('fuel');
+          hapticPickup();
           engineWorld.addParticles(createSparks(st.x, st.y, 12, '#38bdf8'));
           engineWorld.addFloatingText(st.x, st.y - 16, 'FUEL MAX', '#38bdf8', 1.0);
           if (isMultiplayer) {
@@ -663,6 +790,7 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
           postCtfLocal.dashCooldown = 0;
           st.respawnTimer = st.cooldownSec;
           sounds.playRefill('supply');
+          hapticPickup();
           engineWorld.addParticles(createSparks(st.x, st.y, 14, '#c084fc'));
           engineWorld.addFloatingText(st.x, st.y - 16, 'RESUPPLY', '#c084fc', 1.05);
           if (isMultiplayer) {

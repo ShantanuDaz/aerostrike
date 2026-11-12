@@ -178,16 +178,16 @@ function QRScannerModalContent({ onClose, onScanSuccess }: { onClose: () => void
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-3 sm:p-4 animate-in fade-in duration-150 select-none"
+      className="fixed inset-0 z-50 safe-insets flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-2.5 sm:p-4 animate-in fade-in duration-150 select-none"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="cyber-panel clip-chamfer-lg shadow-2xl w-full max-w-md max-h-[92dvh] overflow-hidden flex flex-col border border-cyan-500/50 glow-cyan animate-in zoom-in-95 duration-150 relative"
+        className="cyber-panel clip-chamfer-lg shadow-2xl w-full max-w-md short-wide:max-w-xl max-h-[94dvh] overflow-hidden flex flex-col border border-cyan-500/50 glow-cyan animate-in zoom-in-95 duration-150 relative"
       >
         {/* Top Header (Pinned) */}
-        <div className="shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 border-b border-cyan-500/20 bg-slate-950/90">
+        <div className="shrink-0 flex items-center justify-between px-4 sm:px-6 py-2.5 sm:tall:py-3 border-b border-cyan-500/20 bg-slate-950/90">
           <div className="flex items-center gap-2">
-            <Scan className="w-5 h-5 text-cyan-400 animate-pulse" />
+            <Scan className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400 animate-pulse" />
             <h3 className="text-xs sm:text-sm font-black text-white tracking-wider uppercase font-mono">
               Tactical QR Scanner
             </h3>
@@ -204,77 +204,79 @@ function QRScannerModalContent({ onClose, onScanSuccess }: { onClose: () => void
         </div>
 
         {/* Scrollable Video Viewport Container */}
-        <div className="flex-1 min-h-0 overflow-y-auto relative p-4 sm:p-5 bg-[#060913]">
-          <div className="min-h-full flex flex-col items-center justify-center relative">
-            {/* HTML5 QR Camera Element */}
-            <div
-              id="aerostrike-qr-reader"
-              className="w-full max-w-[230px] sm:max-w-[260px] overflow-hidden rounded-2xl border-2 border-cyan-500/40 relative shadow-2xl bg-black"
-            />
+        <div className="flex-1 min-h-0 overflow-y-auto cyber-scroll relative p-4 sm:tall:p-5 short:p-3 bg-[#060913]">
+          <div className="min-h-full flex flex-col short-wide:flex-row items-center justify-center gap-4 short:gap-4 relative">
+            {/* HTML5 QR Camera Element + Centered Reticle */}
+            <div className="relative flex items-center justify-center w-full max-w-[230px] short:max-w-[165px] sm:tall:max-w-[260px] shrink-0">
+              <div
+                id="aerostrike-qr-reader"
+                className="w-full overflow-hidden rounded-2xl border-2 border-cyan-500/40 relative shadow-2xl bg-black"
+              />
 
-          {/* Sci-Fi Reticle Overlay */}
-          {!errorMessage && (
-            <div className="absolute w-[180px] h-[180px] sm:w-[220px] sm:h-[220px] pointer-events-none flex flex-col justify-between">
-              {/* Corner Brackets */}
-              <div className="flex justify-between">
-                <div className="w-6 h-6 border-t-2 border-l-2 border-cyan-400 glow-cyan" />
-                <div className="w-6 h-6 border-t-2 border-r-2 border-cyan-400 glow-cyan" />
-              </div>
+              {/* Sci-Fi Reticle Overlay (centered directly on viewfinder) */}
+              {!errorMessage && (
+                <div className="absolute inset-4 pointer-events-none flex flex-col justify-between">
+                  {/* Corner Brackets */}
+                  <div className="flex justify-between">
+                    <div className="w-5 h-5 sm:tall:w-6 sm:tall:h-6 border-t-2 border-l-2 border-cyan-400 glow-cyan" />
+                    <div className="w-5 h-5 sm:tall:w-6 sm:tall:h-6 border-t-2 border-r-2 border-cyan-400 glow-cyan" />
+                  </div>
 
-              {/* Scanning Laser Beam */}
-              <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-lg shadow-cyan-400 animate-bounce opacity-90" />
+                  {/* Scanning Laser Beam */}
+                  <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-lg shadow-cyan-400 animate-bounce opacity-90" />
 
-              <div className="flex justify-between">
-                <div className="w-6 h-6 border-b-2 border-l-2 border-cyan-400 glow-cyan" />
-                <div className="w-6 h-6 border-b-2 border-r-2 border-cyan-400 glow-cyan" />
-              </div>
+                  <div className="flex justify-between">
+                    <div className="w-5 h-5 sm:tall:w-6 sm:tall:h-6 border-b-2 border-l-2 border-cyan-400 glow-cyan" />
+                    <div className="w-5 h-5 sm:tall:w-6 sm:tall:h-6 border-b-2 border-r-2 border-cyan-400 glow-cyan" />
+                  </div>
+                </div>
+              )}
+
+              {/* Loading Indicator */}
+              {isInitializing && !errorMessage && (
+                <div className="absolute inset-0 rounded-2xl bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center gap-2.5 p-3 text-center">
+                  <RefreshCw className="w-7 h-7 text-cyan-400 animate-spin" />
+                  <span className="text-[10px] sm:text-xs font-mono font-bold text-cyan-300 uppercase tracking-widest">
+                    INITIALIZING OPTICAL SENSORS...
+                  </span>
+                </div>
+              )}
             </div>
-          )}
 
-          {/* Loading Indicator */}
-          {isInitializing && !errorMessage && (
-            <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3">
-              <RefreshCw className="w-8 h-8 text-cyan-400 animate-spin" />
-              <span className="text-xs font-mono font-bold text-cyan-300 uppercase tracking-widest">
-                INITIALIZING OPTICAL SENSORS...
-              </span>
-            </div>
-          )}
+            {/* Camera Error / Permission Denied */}
+            {errorMessage && (
+              <div className="p-3.5 sm:tall:p-4 rounded-2xl bg-rose-950/40 border border-rose-500/50 text-center flex flex-col items-center gap-2.5 flex-1 min-w-0">
+                <AlertCircle className="w-7 h-7 sm:tall:w-8 sm:tall:h-8 text-rose-400 shrink-0" />
+                <div>
+                  <h4 className="text-xs font-black uppercase text-rose-300 font-mono">
+                    Optical Uplink Failed
+                  </h4>
+                  <p className="text-[11px] text-slate-300 mt-1 leading-relaxed break-words">
+                    {errorMessage}
+                  </p>
+                </div>
+                <span className="text-[10px] font-mono text-slate-400 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800">
+                  Tip: You can manually paste the Room Code in the join box.
+                </span>
+              </div>
+            )}
 
-          {/* Camera Error / Permission Denied */}
-          {errorMessage && (
-            <div className="p-4 rounded-2xl bg-rose-950/40 border border-rose-500/50 text-center flex flex-col items-center gap-3">
-              <AlertCircle className="w-8 h-8 text-rose-400" />
-              <div>
-                <h4 className="text-xs font-black uppercase text-rose-300 font-mono">
-                  Optical Uplink Failed
-                </h4>
-                <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
-                  {errorMessage}
+            {/* Instructions */}
+            {!errorMessage && (
+              <div className="text-center short-wide:text-left short-wide:flex-1 min-w-0">
+                <span className="text-[11px] font-mono font-bold text-cyan-300 uppercase tracking-widest flex items-center justify-center short-wide:justify-start gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-cyan-400 shrink-0" /> Align Room QR in Reticle
+                </span>
+                <p className="text-[10px] font-mono text-slate-400 mt-1 leading-relaxed">
+                  Automatic optical scan will lock and connect to squad
                 </p>
               </div>
-              <span className="text-[10px] font-mono text-slate-400 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800">
-                Tip: You can manually paste the Room Code in the join box.
-              </span>
-            </div>
-          )}
-
-          {/* Instructions */}
-          {!errorMessage && (
-            <div className="mt-4 text-center">
-              <span className="text-[11px] font-mono font-bold text-cyan-300 uppercase tracking-widest flex items-center justify-center gap-1.5">
-                <Zap className="w-3.5 h-3.5 text-cyan-400" /> Align Room QR in Reticle
-              </span>
-              <p className="text-[10px] font-mono text-slate-400 mt-0.5">
-                Automatic optical scan will lock and connect to squad
-              </p>
-            </div>
-          )}
+            )}
           </div>
         </div>
 
         {/* Pinned Footer */}
-        <div className="shrink-0 px-4 sm:px-6 py-2.5 bg-slate-950/90 border-t border-cyan-500/20 flex items-center justify-between">
+        <div className="shrink-0 px-4 sm:px-6 py-2 sm:tall:py-2.5 bg-slate-950/90 border-t border-cyan-500/20 flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400">
             <Camera className="w-3.5 h-3.5 text-cyan-400" />
             <span>CAMERA TARGETING ACTIVE</span>

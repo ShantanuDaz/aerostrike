@@ -200,10 +200,11 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
           keys.find((key) => roster[key].callsign === idOrCallsign);
       if (targetId && roster[targetId]) {
         const current = roster[targetId];
+        const baseAvatar = patch.avatar ?? current.avatar;
         const nextAvatar =
-          patch.callsign && current.avatar
-            ? { ...current.avatar, callsign: patch.callsign }
-            : patch.avatar ?? current.avatar;
+          patch.callsign && baseAvatar
+            ? { ...baseAvatar, callsign: patch.callsign }
+            : baseAvatar;
         const updated: RosterMember = { ...current, ...patch, avatar: nextAvatar };
         roster[targetId] = updated;
         if (updated.isOnline === false) {

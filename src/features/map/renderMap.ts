@@ -1,13 +1,141 @@
 import type { ActiveRefillStation, GameMap } from './types';
+import { getCompiledTerrainShapes, type CompiledTerrainShape } from './terrainGeometry';
+import { getMapThemePalette, type ThemePalette } from './renderBackdrop';
 
 let cachedStaticCanvas: HTMLCanvasElement | null = null;
 let cachedStaticKey = '';
+
+function drawTerrainShape(
+  ctx: CanvasRenderingContext2D,
+  shape: CompiledTerrainShape,
+  palette: ThemePalette,
+): void {
+  const pts = shape.points;
+  if (pts.length < 3) return;
+
+  ctx.save();
+
+  const baseColor =
+    shape.color ??
+    (shape.style === 'rock'
+      ? palette.terrainRock
+      : shape.style === 'deflector'
+        ? '#1e293b'
+        : palette.terrainRockAlt);
+
+  // 1. Trace closed polygon & clip for interior texture
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) {
+    ctx.lineTo(pts[i].x, pts[i].y);
+  }
+  ctx.closePath();
+
+  const spanH = Math.max(12, shape.maxY - shape.minY);
+  const bodyGrad = ctx.createLinearGradient(0, shape.minY, 0, shape.maxY);
+  bodyGrad.addColorStop(0, baseColor);
+  bodyGrad.addColorStop(1, '#090d18');
+  ctx.fillStyle = bodyGrad;
+  ctx.fill();
+
+  ctx.save();
+  ctx.clip();
+
+  if (shape.style === 'rock' || shape.style === 'crystal' || shape.style === 'ice') {
+    // Diagonal geologic strata / crystal facets (zero per-frame cost; cached once)
+    ctx.strokeStyle =
+      shape.style === 'ice' || shape.style === 'crystal'
+        ? 'rgba(103, 232, 249, 0.085)'
+        : 'rgba(255, 255, 255, 0.04)';
+    ctx.lineWidth = shape.style === 'rock' ? 7 : 4;
+    const step = shape.style === 'rock' ? 38 : 28;
+    ctx.beginPath();
+    for (let sx = shape.minX - spanH; sx <= shape.maxX + spanH; sx += step) {
+      ctx.moveTo(sx, shape.minY - 8);
+      ctx.lineTo(sx + spanH * 0.55, shape.maxY + 8);
+    }
+    ctx.stroke();
+  } else if (shape.style === 'deflector') {
+    // Angled tactical armor stripes on sloped bunker deflectors
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.055)';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    for (let sx = shape.minX - spanH; sx <= shape.maxX + spanH; sx += 26) {
+      ctx.moveTo(sx, shape.maxY + 8);
+      ctx.lineTo(sx + spanH * 0.65, shape.minY - 8);
+    }
+    ctx.stroke();
+  } else {
+    // Brushed alloy seam lines
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.08)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let px = Math.ceil(shape.minX / 64) * 64; px < shape.maxX; px += 64) {
+      ctx.moveTo(px, shape.minY);
+      ctx.lineTo(px, shape.maxY);
+    }
+    ctx.stroke();
+  }
+
+  // Subtle top subsurface highlight band
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.035)';
+  ctx.fillRect(shape.minX, shape.minY, shape.maxX - shape.minX, Math.min(10, spanH * 0.25));
+  ctx.restore();
+
+  // 2. Perimeter contour stroke
+  ctx.strokeStyle = 'rgba(148, 163, 184, 0.26)';
+  ctx.lineWidth = 1.25;
+  ctx.stroke();
+
+  // 3. Crisp glowing surface trim along walkable curves / sloped edges
+  const trim = shape.trimColor ?? palette.terrainTrim;
+  ctx.strokeStyle = trim;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  if (shape.topArc.length >= 2) {
+    ctx.globalAlpha = 0.72;
+    ctx.lineWidth = 2.6;
+    ctx.beginPath();
+    ctx.moveTo(shape.topArc[0].x, shape.topArc[0].y + 1);
+    for (let i = 1; i < shape.topArc.length; i++) {
+      ctx.lineTo(shape.topArc[i].x, shape.topArc[i].y + 1);
+    }
+    ctx.stroke();
+
+    if (shape.bottomArc && shape.bottomArc.length >= 2) {
+      ctx.globalAlpha = 0.34;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(shape.bottomArc[0].x, shape.bottomArc[0].y - 1);
+      for (let i = 1; i < shape.bottomArc.length; i++) {
+        ctx.lineTo(shape.bottomArc[i].x, shape.bottomArc[i].y - 1);
+      }
+      ctx.stroke();
+    }
+  } else {
+    ctx.globalAlpha = 0.68;
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    for (let i = 0; i < shape.edges.length; i++) {
+      const e = shape.edges[i];
+      if (!e.isWalkable) continue;
+      ctx.moveTo(e.x1, e.y1 + 0.8);
+      ctx.lineTo(e.x2, e.y2 + 0.8);
+    }
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
 
 function drawStaticMapLayer(
   ctx: CanvasRenderingContext2D,
   map: GameMap,
   skipBackground: boolean,
 ): void {
+  const palette = getMapThemePalette(map);
+
   // 1. Deep Space Void Background (optional when GameCanvas draws parallax sky layer)
   if (!skipBackground) {
     ctx.fillStyle = map.backgroundColor || '#060913';
@@ -16,7 +144,7 @@ function drawStaticMapLayer(
 
   // 2. Subtle Tactical Grid & Sector Boundaries
   ctx.save();
-  ctx.strokeStyle = 'rgba(0, 240, 255, 0.028)';
+  ctx.strokeStyle = 'rgba(0, 240, 255, 0.025)';
   ctx.lineWidth = 1;
   const gridSize = 100;
 
@@ -97,7 +225,7 @@ function drawStaticMapLayer(
     ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
 
     // Subtle interior panel sheen
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.025)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.028)';
     ctx.fillRect(
       obstacle.x + 2,
       obstacle.y + 3,
@@ -112,10 +240,10 @@ function drawStaticMapLayer(
     // Crisp Glowing Top Rail
     ctx.fillStyle =
       obstacle.type === 'platform'
-        ? 'rgba(56, 189, 248, 0.55)'
+        ? 'rgba(56, 189, 248, 0.58)'
         : obstacle.type === 'ground'
-          ? 'rgba(56, 189, 248, 0.32)'
-          : 'rgba(148, 163, 184, 0.28)';
+          ? 'rgba(56, 189, 248, 0.34)'
+          : 'rgba(148, 163, 184, 0.30)';
     ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, Math.min(2.5, obstacle.height));
 
     // Recessed bolts only on wider platforms
@@ -128,10 +256,17 @@ function drawStaticMapLayer(
     }
     ctx.restore();
   }
+
+  // 5. Sloped & Curved Terrain Shapes
+  const terrainShapes = getCompiledTerrainShapes(map);
+  for (let i = 0; i < terrainShapes.length; i++) {
+    drawTerrainShape(ctx, terrainShapes[i], palette);
+  }
 }
 
 /**
- * Renders the map background, tactical grid lines, sleek outpost zones, and armored platforms.
+ * Renders the map background, tactical grid lines, sleek outpost zones, armored platforms,
+ * and sloped/curved terrain hulls.
  * Static layers are cached in an offscreen canvas; animated hazards draw dynamically per frame.
  */
 export function renderMap(
@@ -141,7 +276,8 @@ export function renderMap(
   skipBackground: boolean = false,
 ): void {
   if (typeof document !== 'undefined') {
-    const key = `${map.id}:${map.width}x${map.height}:${map.obstacles.length}:${skipBackground ? 1 : 0}`;
+    const shapeCount = map.terrainShapes ? map.terrainShapes.length : 0;
+    const key = `${map.id}:${map.theme ?? ''}:${map.width}x${map.height}:${map.obstacles.length}:${shapeCount}:${skipBackground ? 1 : 0}`;
     if (!cachedStaticCanvas || cachedStaticKey !== key) {
       const offscreen = cachedStaticCanvas ?? document.createElement('canvas');
       offscreen.width = map.width;

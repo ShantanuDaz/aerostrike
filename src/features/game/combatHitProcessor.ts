@@ -228,6 +228,12 @@ export function processBulletHits(params: ProcessBulletHitsParams) {
         } else {
           useMatchStatsStore.getState().recordKill(killEvt);
         }
+        useMatchStatsStore.getState().setLocalDeathSummary({
+          killerCallsign: killEvt.killerCallsign,
+          killerTeam: killEvt.killerTeam,
+          weaponType: killEvt.weaponType,
+          atMs: Date.now(),
+        });
 
         if (carryingBeforeHit) {
           const enemyTeam: Team = localTeam === 'blue' ? 'red' : 'blue';

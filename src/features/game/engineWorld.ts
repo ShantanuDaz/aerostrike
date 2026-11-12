@@ -3,8 +3,21 @@ import type { ActiveWeaponPickup, Bullet, Particle, WeaponType } from '../combat
 import type { Team } from '../ctf/types';
 import type { ActiveRefillStation, GameMap } from '../map/types';
 import { isNewerSeq8, normalizeAngleRad } from '../network/fastProtocol';
+import { resolveCapsuleVsTerrainShapes } from '../map/terrainGeometry';
 import type { Player } from '../player/types';
-import { createSoloBotSquad, type SoloBot } from './botAI';
+import { hapticDamage } from '../controls/haptics';
+import {
+  createSoloBotSquad,
+  type BotDifficulty,
+  type SoloBot,
+  type SoloSquadSize,
+} from './botAI';
+
+export interface SoloSkirmishConfig {
+  squadSize: SoloSquadSize;
+  difficulty: BotDifficulty;
+  playerTeam: Team;
+}
 
 export function buildActiveStations(map: GameMap): ActiveRefillStation[] {
   return (map.refillStations || []).map((st) => ({
@@ -119,12 +132,24 @@ class GameEngineWorld {
   public soloBots: SoloBot[] = [];
   public floatingTexts: FloatingDamageText[] = [];
   public damageIndicators: DamageIndicator[] = [];
+  public soloConfig: SoloSkirmishConfig = {
+    squadSize: '2v2',
+    difficulty: 'veteran',
+    playerTeam: 'blue',
+  };
   public minimapTarget: MinimapTargetState = {
     canvas: null,
     width: 148,
     height: 82,
     hidden: false,
   };
+
+  public setSoloConfig(patch: Partial<SoloSkirmishConfig>) {
+    this.soloConfig = {
+      ...this.soloConfig,
+      ...patch,
+    };
+  }
 
   private localUrgentDirty = false;
   private onUrgentStateChange: (() => void) | null = null;
@@ -443,6 +468,20 @@ class GameEngineWorld {
             else predX = obs.x + obs.width + REMOTE_HALF_W;
           }
         }
+
+        if (map.terrainShapes && map.terrainShapes.length > 0) {
+          const resolved = resolveCapsuleVsTerrainShapes(
+            predX,
+            predY,
+            0,
+            0,
+            REMOTE_HALF_W,
+            REMOTE_HALF_H,
+            map,
+          );
+          predX = Math.max(REMOTE_HALF_W, Math.min(map.width - REMOTE_HALF_W, resolved.x));
+          predY = Math.max(REMOTE_HALF_H, Math.min(map.height - REMOTE_HALF_H, resolved.y));
+        }
       }
 
       rp.renderX += (predX - rp.renderX) * blend;
@@ -477,6 +516,7 @@ class GameEngineWorld {
   }
 
   public addDamageIndicator(angle: number, damage: number) {
+    hapticDamage();
     const intensity = Math.min(1, Math.max(0.35, damage / 45));
     this.damageIndicators.push({
       angle,
@@ -510,8 +550,14 @@ class GameEngineWorld {
     }
   }
 
-  public spawnSoloBots(map: GameMap, localTeam: Team) {
-    this.soloBots = createSoloBotSquad(map, localTeam);
+  public spawnSoloBots(
+    map: GameMap,
+    localTeam: Team,
+    configOverride?: Partial<SoloSkirmishConfig>,
+  ) {
+    const squadSize = configOverride?.squadSize ?? this.soloConfig.squadSize;
+    const difficulty = configOverride?.difficulty ?? this.soloConfig.difficulty;
+    this.soloBots = createSoloBotSquad(map, localTeam, { squadSize, difficulty });
   }
 
   public clearSoloBots() {

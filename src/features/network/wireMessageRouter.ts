@@ -230,17 +230,28 @@ function handleDamageMessage(
         killerRemote?.team ??
         (localPlayer.team === 'blue' ? 'red' : 'blue');
 
+      const killerCallsign = isSelf
+        ? localPlayer.avatar.callsign
+        : killerMember?.callsign || killerRemote?.avatar.callsign || 'PILOT';
+      const resolvedKillerTeam: Team = isSelf ? localPlayer.team : killerTeam;
+      const resolvedWeapon = isSelf ? 'self' : damageEvt.weaponType ?? 'rifle';
+
       ctx.broadcastKillFeed({
         id: `kill_${myPlayerId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         killerId: isSelf ? myPlayerId : killerMember?.playerId || damageEvt.dealerId,
-        killerCallsign: isSelf
-          ? localPlayer.avatar.callsign
-          : killerMember?.callsign || killerRemote?.avatar.callsign || 'PILOT',
-        killerTeam: isSelf ? localPlayer.team : killerTeam,
+        killerCallsign,
+        killerTeam: resolvedKillerTeam,
         victimId: myPlayerId,
         victimCallsign: localPlayer.avatar.callsign,
         victimTeam: localPlayer.team,
-        weaponType: isSelf ? 'self' : damageEvt.weaponType ?? 'rifle',
+        weaponType: resolvedWeapon,
+      });
+
+      useMatchStatsStore.getState().setLocalDeathSummary({
+        killerCallsign,
+        killerTeam: resolvedKillerTeam,
+        weaponType: resolvedWeapon,
+        atMs: Date.now(),
       });
     }
 
@@ -423,6 +434,7 @@ function handlePeerMetaMessage(
     const rosterPatch: Partial<RosterMember> = { isOnline: true };
     if (cleanedMeta.callsign !== undefined) rosterPatch.callsign = cleanedMeta.callsign;
     if (cleanedMeta.team !== undefined) rosterPatch.team = cleanedMeta.team;
+    if (cleanedMeta.avatar !== undefined) rosterPatch.avatar = cleanedMeta.avatar;
     if (cleanedMeta.isReady !== undefined) rosterPatch.isReady = cleanedMeta.isReady;
     if (!ctx.isHostRole && cleanedMeta.isHost !== undefined) {
       rosterPatch.isHost = cleanedMeta.isHost;

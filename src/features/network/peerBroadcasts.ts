@@ -236,6 +236,47 @@ export function sendReadyChangeBroadcast(
   }
 }
 
+export function sendAvatarChangeBroadcast(
+  session: PeerTransportSession,
+  sendToNetwork: SendToNetworkFn,
+) {
+  const avatarStore = useAvatarStore.getState();
+  const playerStore = usePlayerStore.getState();
+  const currentReady =
+    useNetworkStore.getState().roster[avatarStore.playerId]?.isReady ?? true;
+
+  useNetworkStore.getState().updateRosterMember(avatarStore.playerId, {
+    callsign: avatarStore.avatar.callsign,
+    avatar: avatarStore.avatar,
+  });
+
+  if (!session.peer || session.peer.destroyed) return;
+
+  const meta = {
+    callsign: avatarStore.avatar.callsign,
+    team: playerStore.player.team,
+    avatar: avatarStore.avatar,
+    isReady: currentReady,
+    isHost: session.isHostRole,
+  };
+  sendToNetwork({
+    kind: 'peer_meta',
+    senderId: session.selfPeerId || avatarStore.playerId,
+    payload: meta,
+  });
+
+  if (session.isHostRole) {
+    sendToNetwork({
+      kind: 'room_auth',
+      senderId: session.selfPeerId || 'host',
+      payload: {
+        type: 'roster_sync',
+        roster: Object.values(useNetworkStore.getState().roster),
+      },
+    });
+  }
+}
+
 export function sendMapChangeBroadcast(
   session: PeerTransportSession,
   sendToNetwork: SendToNetworkFn,

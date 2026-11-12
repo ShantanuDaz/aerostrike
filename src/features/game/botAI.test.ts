@@ -50,12 +50,31 @@ function createFlags(map: GameMap): Record<Team, Flag> {
 }
 
 describe('Solo AI Squad formation, firing, and hazard/CTF reporting', () => {
-  it('spawns a balanced 2v2 squad relative to local player team', () => {
+  it('spawns balanced 1v1, 2v2, and 3v3 squads with difficulty presets', () => {
     const map = createBotTestMap();
-    const bots = createSoloBotSquad(map, 'blue');
-    expect(bots).toHaveLength(3);
-    expect(bots.filter((b) => b.team === 'blue')).toHaveLength(1);
-    expect(bots.filter((b) => b.team === 'red')).toHaveLength(2);
+
+    const bots1v1 = createSoloBotSquad(map, 'blue', {
+      squadSize: '1v1',
+      difficulty: 'cadet',
+    });
+    expect(bots1v1).toHaveLength(1);
+    expect(bots1v1.filter((b) => b.team === 'blue')).toHaveLength(0);
+    expect(bots1v1.filter((b) => b.team === 'red')).toHaveLength(1);
+    expect(bots1v1[0].difficulty).toBe('cadet');
+
+    const bots2v2 = createSoloBotSquad(map, 'blue');
+    expect(bots2v2).toHaveLength(3);
+    expect(bots2v2.filter((b) => b.team === 'blue')).toHaveLength(1);
+    expect(bots2v2.filter((b) => b.team === 'red')).toHaveLength(2);
+
+    const bots3v3 = createSoloBotSquad(map, 'red', {
+      squadSize: '3v3',
+      difficulty: 'ace',
+    });
+    expect(bots3v3).toHaveLength(5);
+    expect(bots3v3.filter((b) => b.team === 'red')).toHaveLength(2);
+    expect(bots3v3.filter((b) => b.team === 'blue')).toHaveLength(3);
+    expect(bots3v3.every((b) => b.difficulty === 'ace')).toBe(true);
   });
 
   it('detects newly dead bots from hazards, reports dropped flags, and clears lastDamagedBy after respawn', () => {

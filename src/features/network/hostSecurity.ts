@@ -1,3 +1,4 @@
+import type { AvatarConfig, HeadgearType, JetpackStyle, VisorStyle } from '../avatar/types';
 import { WEAPONS } from '../combat/weaponsConfig';
 import type { Flag, MatchStatus, Team } from '../ctf/types';
 import type {
@@ -281,6 +282,57 @@ export function validateIncomingKillFeed(
   return evt;
 }
 
+const VALID_HEADGEAR_TYPES: HeadgearType[] = [
+  'none',
+  'soldier_helmet',
+  'beret',
+  'headband',
+  'gas_mask',
+  'robo_visor',
+  'horns',
+];
+const VALID_VISOR_STYLES: VisorStyle[] = ['classic', 'cyborg', 'sunglasses', 'goggles', 'neon'];
+const VALID_JETPACK_STYLES: JetpackStyle[] = ['dual_tank', 'single_heavy', 'falcon_wings'];
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
+
+export function sanitizeIncomingAvatar(raw: unknown): AvatarConfig | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const candidate = raw as Partial<AvatarConfig>;
+  if (typeof candidate.callsign !== 'string') return undefined;
+  const callsign = candidate.callsign.trim().slice(0, 20);
+  if (!callsign) return undefined;
+  if (
+    typeof candidate.bodyColor !== 'string' ||
+    !HEX_COLOR_RE.test(candidate.bodyColor) ||
+    typeof candidate.skinTone !== 'string' ||
+    !HEX_COLOR_RE.test(candidate.skinTone) ||
+    typeof candidate.headgearColor !== 'string' ||
+    !HEX_COLOR_RE.test(candidate.headgearColor) ||
+    typeof candidate.visorColor !== 'string' ||
+    !HEX_COLOR_RE.test(candidate.visorColor)
+  ) {
+    return undefined;
+  }
+  if (
+    !VALID_HEADGEAR_TYPES.includes(candidate.headgear as HeadgearType) ||
+    !VALID_VISOR_STYLES.includes(candidate.visorStyle as VisorStyle) ||
+    !VALID_JETPACK_STYLES.includes(candidate.jetpackStyle as JetpackStyle)
+  ) {
+    return undefined;
+  }
+
+  return {
+    callsign,
+    bodyColor: candidate.bodyColor,
+    skinTone: candidate.skinTone,
+    headgear: candidate.headgear as HeadgearType,
+    headgearColor: candidate.headgearColor,
+    visorStyle: candidate.visorStyle as VisorStyle,
+    visorColor: candidate.visorColor,
+    jetpackStyle: candidate.jetpackStyle as JetpackStyle,
+  };
+}
+
 export function sanitizeIncomingPeerMeta(
   payload: unknown,
   isHostRole: boolean,
@@ -297,6 +349,12 @@ export function sanitizeIncomingPeerMeta(
   }
   if (raw.team === 'blue' || raw.team === 'red') {
     cleaned.team = raw.team;
+  }
+  if (raw.avatar !== undefined) {
+    const cleanAvatar = sanitizeIncomingAvatar(raw.avatar);
+    if (cleanAvatar) {
+      cleaned.avatar = cleanAvatar;
+    }
   }
   if (typeof raw.isReady === 'boolean') {
     cleaned.isReady = raw.isReady;

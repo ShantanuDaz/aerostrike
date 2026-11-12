@@ -1,6 +1,11 @@
 import type { Bullet, Particle, WeaponType } from './types';
 import type { GameMap } from '../map/types';
-import { createExplosionParticles, createSparks } from './particleSystem';
+import { raycastMapTerrain } from '../map/terrainGeometry';
+import {
+  createDirectionalSparks,
+  createExplosionParticles,
+  createSparks,
+} from './particleSystem';
 import { sounds } from '../audio/soundEngine';
 
 export interface BulletCollisionResult {
@@ -100,30 +105,12 @@ export function getSafeMuzzlePoint(
     return { x: targetX, y: targetY };
   }
 
-  let earliestT: number | null = null;
-  for (let i = 0; i < map.obstacles.length; i++) {
-    const obs = map.obstacles[i];
-    if (obs.type !== 'wall' && obs.type !== 'ground') continue;
-    const t = segmentRectHitT(
-      originX,
-      originY,
-      targetX,
-      targetY,
-      obs.x,
-      obs.y,
-      obs.width,
-      obs.height,
-    );
-    if (t !== null && (earliestT === null || t < earliestT)) {
-      earliestT = t;
-    }
-  }
-
-  if (earliestT === null) {
+  const terrainHit = raycastMapTerrain(originX, originY, targetX, targetY, map);
+  if (!terrainHit) {
     return { x: targetX, y: targetY };
   }
 
-  const safeDist = Math.max(0, earliestT * barrelOffset - 2);
+  const safeDist = Math.max(0, terrainHit.t * barrelOffset - 2);
   return {
     x: originX + cos * safeDist,
     y: originY + sin * safeDist,
@@ -268,24 +255,9 @@ export function updateBullets(
     const endX = startX + bullet.vx * dtScale;
     const endY = startY + bullet.vy * dtScale;
 
-    // 1. Earliest solid obstacle hit along bullet path (ignore platforms and floor hazards)
-    let earliestObsT: number | null = null;
-    for (const obs of map.obstacles) {
-      if (obs.type !== 'wall' && obs.type !== 'ground') continue;
-      const t = segmentRectHitT(
-        startX,
-        startY,
-        endX,
-        endY,
-        obs.x,
-        obs.y,
-        obs.width,
-        obs.height,
-      );
-      if (t !== null && (earliestObsT === null || t < earliestObsT)) {
-        earliestObsT = t;
-      }
-    }
+    // 1. Earliest solid terrain/obstacle hit along bullet path (ignore platforms and hazards)
+    const terrainHit = raycastMapTerrain(startX, startY, endX, endY, map);
+    const earliestObsT = terrainHit ? terrainHit.t : null;
 
     // 2. Earliest humanoid player hit (Head sphere + Torso/Legs capsule)
     let hitPlayer: TargetPlayer | null = null;
@@ -385,15 +357,28 @@ export function updateBullets(
           }
         }
       } else {
-        // Direct kinetic hit
-        newParticles.push(
-          ...createSparks(
-            impactX,
-            impactY,
-            hitPlayer && isHeadshot ? 11 : 7,
-            hitPlayer && isHeadshot ? '#38bdf8' : '#fbbf24',
-          ),
-        );
+        // Direct kinetic hit (directional ricochet sparks on sloped/curved terrain)
+        if (blockedByObstacle && terrainHit) {
+          newParticles.push(
+            ...createDirectionalSparks(
+              impactX,
+              impactY,
+              terrainHit.nx,
+              terrainHit.ny,
+              7,
+              '#fbbf24',
+            ),
+          );
+        } else {
+          newParticles.push(
+            ...createSparks(
+              impactX,
+              impactY,
+              hitPlayer && isHeadshot ? 11 : 7,
+              hitPlayer && isHeadshot ? '#38bdf8' : '#fbbf24',
+            ),
+          );
+        }
 
         if (hitPlayer) {
           const angle = Math.atan2(bullet.vy, bullet.vx);

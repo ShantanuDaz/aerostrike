@@ -1,17 +1,81 @@
 import type { Camera } from './types';
 
-export function createCamera(viewportWidth: number, viewportHeight: number): Camera {
+export const MIN_CAMERA_ZOOM = 0.55;
+export const MAX_CAMERA_ZOOM = 1.35;
+export const DEFAULT_CAMERA_ZOOM = 1.0;
+export const CAMERA_ZOOM_STEP = 0.1;
+
+export function clampCameraZoom(zoom: number): number {
+  if (!Number.isFinite(zoom) || zoom <= 0) {
+    return DEFAULT_CAMERA_ZOOM;
+  }
+  const clamped = Math.max(MIN_CAMERA_ZOOM, Math.min(MAX_CAMERA_ZOOM, zoom));
+  return Math.round(clamped * 100) / 100;
+}
+
+/**
+ * Computes a responsive tactical zoom level so smaller/mobile viewports
+ * keep generous arena visibility comparable to desktop displays.
+ */
+export function computeAutoCameraZoom(
+  viewportWidth: number,
+  viewportHeight: number,
+): number {
+  if (
+    !Number.isFinite(viewportWidth) ||
+    !Number.isFinite(viewportHeight) ||
+    viewportWidth <= 0 ||
+    viewportHeight <= 0
+  ) {
+    return DEFAULT_CAMERA_ZOOM;
+  }
+
+  const ratio = Math.min(viewportWidth / 1080, viewportHeight / 580);
+  if (ratio >= 1) {
+    return DEFAULT_CAMERA_ZOOM;
+  }
+  return clampCameraZoom(ratio);
+}
+
+export function getWorldViewportSize(camera: Camera): {
+  worldViewWidth: number;
+  worldViewHeight: number;
+  zoom: number;
+} {
+  const zoom = camera.zoom > 0 ? camera.zoom : DEFAULT_CAMERA_ZOOM;
+  return {
+    worldViewWidth: camera.viewportWidth / zoom,
+    worldViewHeight: camera.viewportHeight / zoom,
+    zoom,
+  };
+}
+
+export function createCamera(
+  viewportWidth: number,
+  viewportHeight: number,
+  zoom: number = DEFAULT_CAMERA_ZOOM,
+): Camera {
   return {
     x: 0,
     y: 0,
     viewportWidth,
     viewportHeight,
+    zoom: clampCameraZoom(zoom),
   };
+}
+
+function clampAxisOffset(value: number, mapSize: number, worldViewSize: number): number {
+  const maxOffset = mapSize - worldViewSize;
+  if (maxOffset <= 0) {
+    // When zoomed out wider than the arena, center the arena cleanly in the viewport
+    return maxOffset / 2;
+  }
+  return Math.max(0, Math.min(value, maxOffset));
 }
 
 /**
  * Smoothly interpolates the camera to center on the target point (player),
- * clamped to the map boundaries.
+ * clamped to the map boundaries (or centered when zoomed wider than the map).
  */
 export function updateCamera(
   camera: Camera,
@@ -21,26 +85,20 @@ export function updateCamera(
   mapHeight: number,
   lerpFactor: number = 0.12,
 ): Camera {
-  // Desired top-left position to center target in viewport
-  const idealX = targetX - camera.viewportWidth / 2;
-  const idealY = targetY - camera.viewportHeight / 2;
+  const { worldViewWidth, worldViewHeight } = getWorldViewportSize(camera);
 
-  // Maximum scroll offsets
-  const maxX = Math.max(0, mapWidth - camera.viewportWidth);
-  const maxY = Math.max(0, mapHeight - camera.viewportHeight);
+  // Desired top-left world position to center target in viewport
+  const idealX = targetX - worldViewWidth / 2;
+  const idealY = targetY - worldViewHeight / 2;
 
   // Lerp towards ideal position
-  let nextX = camera.x + (idealX - camera.x) * lerpFactor;
-  let nextY = camera.y + (idealY - camera.y) * lerpFactor;
-
-  // Clamp within map bounds
-  nextX = Math.max(0, Math.min(nextX, maxX));
-  nextY = Math.max(0, Math.min(nextY, maxY));
+  const lerpedX = camera.x + (idealX - camera.x) * lerpFactor;
+  const lerpedY = camera.y + (idealY - camera.y) * lerpFactor;
 
   return {
     ...camera,
-    x: nextX,
-    y: nextY,
+    x: clampAxisOffset(lerpedX, mapWidth, worldViewWidth),
+    y: clampAxisOffset(lerpedY, mapHeight, worldViewHeight),
   };
 }
 
@@ -52,9 +110,10 @@ export function screenToWorld(
   screenY: number,
   camera: Camera,
 ): { worldX: number; worldY: number } {
+  const zoom = camera.zoom > 0 ? camera.zoom : DEFAULT_CAMERA_ZOOM;
   return {
-    worldX: screenX + camera.x,
-    worldY: screenY + camera.y,
+    worldX: screenX / zoom + camera.x,
+    worldY: screenY / zoom + camera.y,
   };
 }
 
@@ -66,8 +125,9 @@ export function worldToScreen(
   worldY: number,
   camera: Camera,
 ): { screenX: number; screenY: number } {
+  const zoom = camera.zoom > 0 ? camera.zoom : DEFAULT_CAMERA_ZOOM;
   return {
-    screenX: worldX - camera.x,
-    screenY: worldY - camera.y,
+    screenX: (worldX - camera.x) * zoom,
+    screenY: (worldY - camera.y) * zoom,
   };
 }

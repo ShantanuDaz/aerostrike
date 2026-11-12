@@ -6,6 +6,7 @@ export const skyCitadelMap: GameMap = {
   width: 2800,
   height: 1600,
   backgroundColor: '#070d1e',
+  theme: 'sky_citadel',
 
   baseBlue: {
     x: 100,
@@ -115,5 +116,55 @@ export const skyCitadelMap: GameMap = {
     { x: 840, y: 580, width: 240, height: 22, color: '#94a3b8', type: 'platform' },
     { x: 1720, y: 580, width: 240, height: 22, color: '#94a3b8', type: 'platform' },
     { x: 1240, y: 420, width: 320, height: 24, color: '#cbd5e1', type: 'platform' },
+  ],
+
+  terrainShapes: [
+    // Citadel Island Tapered Hull Prows & Bastion Deflectors
+    {
+      kind: 'polygon',
+      id: 'sc-prow-blue',
+      type: 'wall',
+      style: 'deflector',
+      color: '#1e3a5f',
+      trimColor: '#22d3ee',
+      points: [
+        { x: 540, y: 1220 },
+        { x: 635, y: 1280 },
+        { x: 540, y: 1410 },
+      ],
+    },
+    {
+      kind: 'polygon',
+      id: 'sc-prow-red',
+      type: 'wall',
+      style: 'deflector',
+      color: '#5c1d24',
+      trimColor: '#fb7185',
+      points: [
+        { x: 2260, y: 1220 },
+        { x: 2260, y: 1410 },
+        { x: 2165, y: 1280 },
+      ],
+    },
+    // Sloped Sanctuary Crown Arch Over Central Pedestal
+    {
+      kind: 'spline_floor',
+      id: 'sc-sanctuary-arch',
+      type: 'wall',
+      style: 'alloy',
+      color: '#1e3a5f',
+      trimColor: '#22d3ee',
+      samples: 22,
+      topPoints: [
+        { x: 1265, y: 625 },
+        { x: 1400, y: 562 },
+        { x: 1535, y: 625 },
+      ],
+      bottomPoints: [
+        { x: 1265, y: 650 },
+        { x: 1400, y: 590 },
+        { x: 1535, y: 650 },
+      ],
+    },
   ],
 };

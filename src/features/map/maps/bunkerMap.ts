@@ -6,6 +6,7 @@ export const bunkerMap: GameMap = {
   width: 900,
   height: 600,
   backgroundColor: '#14181d',
+  theme: 'bunker_vault',
   baseBlue: { x: 40, y: 440, width: 140, height: 120 },
   baseRed: { x: 720, y: 440, width: 140, height: 120 },
   flagBlue: { x: 90, y: 480 },
@@ -61,6 +62,56 @@ export const bunkerMap: GameMap = {
       height: 20,
       color: '#4b5563',
       type: 'platform',
+    },
+  ],
+
+  terrainShapes: [
+    // Concrete Pillar Chamfered Deflector Buttresses
+    {
+      kind: 'polygon',
+      id: 'bunk-buttress-l',
+      type: 'ground',
+      style: 'deflector',
+      color: '#374151',
+      trimColor: '#f59e0b',
+      points: [
+        { x: 410, y: 505 },
+        { x: 410, y: 560 },
+        { x: 350, y: 560 },
+      ],
+    },
+    {
+      kind: 'polygon',
+      id: 'bunk-buttress-r',
+      type: 'ground',
+      style: 'deflector',
+      color: '#374151',
+      trimColor: '#f59e0b',
+      points: [
+        { x: 490, y: 505 },
+        { x: 550, y: 560 },
+        { x: 490, y: 560 },
+      ],
+    },
+    // Reinforced Vault Ceiling Curve
+    {
+      kind: 'spline_floor',
+      id: 'bunk-vault-ceiling',
+      type: 'wall',
+      style: 'alloy',
+      color: '#2a3545',
+      trimColor: '#f59e0b',
+      samples: 20,
+      topPoints: [
+        { x: 160, y: 0 },
+        { x: 450, y: 0 },
+        { x: 740, y: 0 },
+      ],
+      bottomPoints: [
+        { x: 160, y: 42 },
+        { x: 450, y: 112 },
+        { x: 740, y: 42 },
+      ],
     },
   ],
 };

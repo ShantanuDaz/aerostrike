@@ -6,6 +6,7 @@ export const ctfArenaMap: GameMap = {
   width: 3200,
   height: 1800,
   backgroundColor: '#0a0f1d',
+  theme: 'canyon_outpost',
 
   baseBlue: {
     x: 120,
@@ -149,5 +150,113 @@ export const ctfArenaMap: GameMap = {
     // Right Sky Island
     { x: 2060, y: 400, width: 260, height: 22, color: '#94a3b8', type: 'platform' },
     { x: 2510, y: 650, width: 240, height: 20, color: '#64748b', type: 'platform' },
+  ],
+
+  terrainShapes: [
+    // Outer Base Cliff Slope Ramps (run up/down seamlessly between courtyard cliff & canyon floor)
+    {
+      kind: 'polygon',
+      id: 'ctf-ramp-blue-base',
+      type: 'ground',
+      style: 'rock',
+      color: '#1e293b',
+      trimColor: '#38bdf8',
+      points: [
+        { x: 460, y: 1585 },
+        { x: 620, y: 1720 },
+        { x: 460, y: 1720 },
+      ],
+    },
+    {
+      kind: 'polygon',
+      id: 'ctf-ramp-red-base',
+      type: 'ground',
+      style: 'rock',
+      color: '#1e293b',
+      trimColor: '#fb7185',
+      points: [
+        { x: 2580, y: 1720 },
+        { x: 2740, y: 1585 },
+        { x: 2740, y: 1720 },
+      ],
+    },
+    // Sloped Rampart Deflectors atop Forward Base Barriers
+    {
+      kind: 'polygon',
+      id: 'ctf-cap-blue',
+      type: 'wall',
+      style: 'deflector',
+      color: '#1d4ed8',
+      trimColor: '#38bdf8',
+      points: [
+        { x: 420, y: 1170 },
+        { x: 460, y: 1200 },
+        { x: 420, y: 1200 },
+      ],
+    },
+    {
+      kind: 'polygon',
+      id: 'ctf-cap-red',
+      type: 'wall',
+      style: 'deflector',
+      color: '#b91c1c',
+      trimColor: '#fb7185',
+      points: [
+        { x: 2780, y: 1170 },
+        { x: 2780, y: 1200 },
+        { x: 2740, y: 1200 },
+      ],
+    },
+    // Smooth Canyon Berms Leading Down Toward Pit Rescue Pads
+    {
+      kind: 'spline_floor',
+      id: 'ctf-berm-left',
+      type: 'ground',
+      style: 'rock',
+      color: '#233149',
+      trimColor: '#38bdf8',
+      bottomY: 1720,
+      samples: 12,
+      topPoints: [
+        { x: 1110, y: 1645 },
+        { x: 1185, y: 1672 },
+        { x: 1245, y: 1720 },
+      ],
+    },
+    {
+      kind: 'spline_floor',
+      id: 'ctf-berm-right',
+      type: 'ground',
+      style: 'rock',
+      color: '#233149',
+      trimColor: '#38bdf8',
+      bottomY: 1720,
+      samples: 12,
+      topPoints: [
+        { x: 1955, y: 1720 },
+        { x: 2015, y: 1672 },
+        { x: 2090, y: 1645 },
+      ],
+    },
+    // Arched High Zeppelin Canopy Roof
+    {
+      kind: 'spline_floor',
+      id: 'ctf-zeppelin-arch',
+      type: 'wall',
+      style: 'alloy',
+      color: '#334155',
+      trimColor: '#38bdf8',
+      samples: 20,
+      topPoints: [
+        { x: 1380, y: 275 },
+        { x: 1600, y: 215 },
+        { x: 1820, y: 275 },
+      ],
+      bottomPoints: [
+        { x: 1380, y: 302 },
+        { x: 1600, y: 244 },
+        { x: 1820, y: 302 },
+      ],
+    },
   ],
 };

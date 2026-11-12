@@ -6,6 +6,7 @@ export const cryoFacilityMap: GameMap = {
   width: 2400,
   height: 1400,
   backgroundColor: '#08101c',
+  theme: 'cryo_reactor',
 
   baseBlue: {
     x: 80,
@@ -115,5 +116,55 @@ export const cryoFacilityMap: GameMap = {
     { x: 1070, y: 330, width: 260, height: 22, color: '#cbd5e1', type: 'platform' },
     { x: 1420, y: 340, width: 220, height: 22, color: '#94a3b8', type: 'platform' },
     { x: 1720, y: 420, width: 220, height: 20, color: '#64748b', type: 'platform' },
+  ],
+
+  terrainShapes: [
+    // Glaciated Base Approach Slopes Leading to Lift Pads
+    {
+      kind: 'polygon',
+      id: 'cryo-ramp-blue',
+      type: 'ground',
+      style: 'ice',
+      color: '#1a384e',
+      trimColor: '#5eead4',
+      points: [
+        { x: 400, y: 1235 },
+        { x: 540, y: 1340 },
+        { x: 400, y: 1340 },
+      ],
+    },
+    {
+      kind: 'polygon',
+      id: 'cryo-ramp-red',
+      type: 'ground',
+      style: 'ice',
+      color: '#1a384e',
+      trimColor: '#5eead4',
+      points: [
+        { x: 1860, y: 1340 },
+        { x: 2000, y: 1235 },
+        { x: 2000, y: 1340 },
+      ],
+    },
+    // Vaulted Cryo Containment Arch Dome Above Center Core
+    {
+      kind: 'spline_floor',
+      id: 'cryo-core-dome',
+      type: 'wall',
+      style: 'crystal',
+      color: '#134e4a',
+      trimColor: '#5eead4',
+      samples: 22,
+      topPoints: [
+        { x: 1015, y: 540 },
+        { x: 1200, y: 478 },
+        { x: 1385, y: 540 },
+      ],
+      bottomPoints: [
+        { x: 1015, y: 564 },
+        { x: 1200, y: 506 },
+        { x: 1385, y: 564 },
+      ],
+    },
   ],
 };

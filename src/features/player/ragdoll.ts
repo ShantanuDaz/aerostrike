@@ -1,6 +1,7 @@
 import type { AvatarConfig } from '../avatar/types';
 import type { Team } from '../ctf/types';
 import type { GameMap } from '../map/types';
+import { resolveCircleVsTerrainShapes } from '../map/terrainGeometry';
 import {
   drawCombatBoot,
   drawHeadAndGear,
@@ -215,6 +216,15 @@ function resolveRagdollObstacles(
             n.x = obs.x + obs.width + r;
           }
         }
+      }
+    }
+
+    if (map.terrainShapes && map.terrainShapes.length > 0) {
+      const terrainRes = resolveCircleVsTerrainShapes(n.x, n.y, r, map);
+      n.x = terrainRes.x;
+      n.y = terrainRes.y;
+      if (terrainRes.grounded) {
+        groundedFlags[i] = true;
       }
     }
 

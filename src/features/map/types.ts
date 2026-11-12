@@ -1,5 +1,49 @@
 export type ObstacleType = 'ground' | 'platform' | 'wall' | 'hazard';
 
+export type MapThemeId =
+  | 'caldera_orbital'
+  | 'canyon_outpost'
+  | 'sky_citadel'
+  | 'cryo_reactor'
+  | 'bunker_vault'
+  | 'training_deck';
+
+export type TerrainSurfaceStyle = 'rock' | 'alloy' | 'crystal' | 'deflector' | 'ice';
+
+export interface TerrainPoint {
+  x: number;
+  y: number;
+}
+
+export interface PolygonTerrainShape {
+  kind: 'polygon';
+  id?: string;
+  type?: 'ground' | 'wall';
+  points: TerrainPoint[];
+  color?: string;
+  trimColor?: string;
+  style?: TerrainSurfaceStyle;
+}
+
+export interface SplineFloorTerrainShape {
+  kind: 'spline_floor';
+  id?: string;
+  type?: 'ground' | 'wall';
+  /** Ordered control points defining the upper surface spline */
+  topPoints: TerrainPoint[];
+  /** Baseline Y used when bottomPoints is omitted */
+  bottomY?: number;
+  /** Optional lower surface spline points for arched domes & half-pipes */
+  bottomPoints?: TerrainPoint[];
+  /** Number of spline subdivisions along each curve */
+  samples?: number;
+  color?: string;
+  trimColor?: string;
+  style?: TerrainSurfaceStyle;
+}
+
+export type TerrainShape = PolygonTerrainShape | SplineFloorTerrainShape;
+
 export interface Obstacle {
   id?: string;
   x: number;
@@ -60,7 +104,9 @@ export interface GameMap {
   width: number;
   height: number;
   backgroundColor: string;
+  theme?: MapThemeId;
   obstacles: Obstacle[];
+  terrainShapes?: TerrainShape[];
   baseBlue: BaseZone;
   baseRed: BaseZone;
   flagBlue: { x: number; y: number };

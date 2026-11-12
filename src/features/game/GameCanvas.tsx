@@ -4,7 +4,15 @@ import {
   usePlayerStore,
   type RagdollInstance,
 } from '../player';
-import { createCamera, updateCamera, screenToWorld, type Camera } from '../camera';
+import {
+  CAMERA_ZOOM_STEP,
+  clampCameraZoom,
+  computeAutoCameraZoom,
+  createCamera,
+  screenToWorld,
+  updateCamera,
+  type Camera,
+} from '../camera';
 import {
   useCombatStore,
   useMatchStatsStore,
@@ -19,6 +27,7 @@ import { useAvatarStore } from '../avatar/avatarStore';
 import { MinimapView } from '../ui/MinimapView';
 import { VirtualControls } from '../controls/VirtualControls';
 import { useIsTouchHUD } from '../controls/useIsTouchHUD';
+import { hapticShot } from '../controls/haptics';
 import { sounds } from '../audio/soundEngine';
 import { useSettingsStore } from '../settings/settingsStore';
 import { buildActiveStations, engineWorld } from './engineWorld';
@@ -37,6 +46,25 @@ const WEAPON_KEYS: Record<string, WeaponType> = {
   Digit4: 'rocket',
   Digit5: 'pistol',
 };
+
+function getInitialZoom(w: number, h: number): number {
+  const settings = useSettingsStore.getState();
+  return settings.cameraZoomMode === 'custom'
+    ? settings.cameraZoom
+    : computeAutoCameraZoom(w, h);
+}
+
+function adjustZoomByDelta(delta: number, viewW: number, viewH: number): void {
+  const settings = useSettingsStore.getState();
+  const baseZoom =
+    settings.cameraZoomMode === 'custom'
+      ? settings.cameraZoom
+      : computeAutoCameraZoom(viewW, viewH);
+  settings.updateSettings({
+    cameraZoomMode: 'custom',
+    cameraZoom: clampCameraZoom(baseZoom + delta),
+  });
+}
 
 export function GameCanvas({ map }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -67,7 +95,9 @@ export function GameCanvas({ map }: GameCanvasProps) {
     height: initialHeight,
     dpr: typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1,
   });
-  const cameraRef = useRef<Camera>(createCamera(initialWidth, initialHeight));
+  const cameraRef = useRef<Camera>(
+    createCamera(initialWidth, initialHeight, getInitialZoom(initialWidth, initialHeight)),
+  );
   const matchGeneration = useCTFStore((s) => s.matchGeneration);
 
   // Direct HiDPI canvas sizing on resize (zero React re-renders)
@@ -136,9 +166,11 @@ export function GameCanvas({ map }: GameCanvasProps) {
     const spawnedLocal = usePlayerStore.getState().player;
 
     const stats = useMatchStatsStore.getState();
+    stats.setLocalDeathSummary(null);
+    stats.setTacticalMenuOpen(false);
     stats.registerParticipant(myPlayerId, spawnedLocal.avatar.callsign, spawnedLocal.team);
     if (!isMultiplayer) {
-      engineWorld.spawnSoloBots(map, spawnedLocal.team);
+      engineWorld.spawnSoloBots(map, spawnedLocal.team, engineWorld.soloConfig);
       for (const bot of engineWorld.soloBots) {
         stats.registerParticipant(bot.id, bot.player.avatar.callsign, bot.team);
       }
@@ -161,7 +193,7 @@ export function GameCanvas({ map }: GameCanvasProps) {
     const w = window.innerWidth;
     const h = window.innerHeight;
     cameraRef.current = updateCamera(
-      createCamera(w, h),
+      createCamera(w, h, getInitialZoom(w, h)),
       spawnedLocal.x,
       spawnedLocal.y,
       map.width,
@@ -180,6 +212,9 @@ export function GameCanvas({ map }: GameCanvasProps) {
   // Weapon Fire Handler
   const handleFire = useCallback(() => {
     if (useCTFStore.getState().matchStatus !== 'playing') return;
+    const isMultiplayer = Boolean(useNetworkStore.getState().roomCode);
+    if (!isMultiplayer && useMatchStatsStore.getState().tacticalMenuOpen) return;
+
     const player = engineWorld.localPlayer ?? usePlayerStore.getState().player;
     if (player.isDead) return;
 
@@ -196,6 +231,7 @@ export function GameCanvas({ map }: GameCanvasProps) {
     });
 
     if (fireResult) {
+      hapticShot(fireResult.firedWeapon);
       crosshairSpreadRef.current = Math.min(
         12,
         crosshairSpreadRef.current + Math.max(3, fireResult.recoil * 1.4),
@@ -241,6 +277,9 @@ export function GameCanvas({ map }: GameCanvasProps) {
 
     const syncKeyboardInput = () => {
       if (useCTFStore.getState().matchStatus !== 'playing') return;
+      const isMultiplayer = Boolean(useNetworkStore.getState().roomCode);
+      if (!isMultiplayer && useMatchStatsStore.getState().tacticalMenuOpen) return;
+
       let moveX = 0;
       if (keys['KeyA'] || keys['ArrowLeft']) moveX -= 1;
       if (keys['KeyD'] || keys['ArrowRight']) moveX += 1;
@@ -278,7 +317,35 @@ export function GameCanvas({ map }: GameCanvasProps) {
       ) {
         return;
       }
+
+      if (e.code === 'Escape' && !e.repeat) {
+        const stats = useMatchStatsStore.getState();
+        const nextOpen = !stats.tacticalMenuOpen;
+        if (nextOpen) {
+          clearAllInputs();
+        }
+        stats.setTacticalMenuOpen(nextOpen);
+        return;
+      }
+
+      const { width: viewW, height: viewH } = viewportRef.current;
+      if (e.code === 'Equal' || e.code === 'NumpadAdd') {
+        adjustZoomByDelta(CAMERA_ZOOM_STEP, viewW, viewH);
+        return;
+      }
+      if (e.code === 'Minus' || e.code === 'NumpadSubtract') {
+        adjustZoomByDelta(-CAMERA_ZOOM_STEP, viewW, viewH);
+        return;
+      }
+      if ((e.code === 'Digit0' || e.code === 'Numpad0') && !e.repeat) {
+        useSettingsStore.getState().updateSettings({ cameraZoomMode: 'auto' });
+        return;
+      }
+
       if (useCTFStore.getState().matchStatus !== 'playing') return;
+      const isMultiplayer = Boolean(useNetworkStore.getState().roomCode);
+      if (!isMultiplayer && useMatchStatsStore.getState().tacticalMenuOpen) return;
+
       keys[e.code] = true;
       if (WEAPON_KEYS[e.code]) {
         useCombatStore.getState().setEquippedWeapon(WEAPON_KEYS[e.code]);
@@ -301,6 +368,9 @@ export function GameCanvas({ map }: GameCanvasProps) {
       pointerPosRef.current = { x: screenX, y: screenY, active: true };
 
       if (useCTFStore.getState().matchStatus !== 'playing') return;
+      const isMultiplayer = Boolean(useNetworkStore.getState().roomCode);
+      if (!isMultiplayer && useMatchStatsStore.getState().tacticalMenuOpen) return;
+
       const player = engineWorld.localPlayer ?? usePlayerStore.getState().player;
       const { worldX, worldY } = screenToWorld(screenX, screenY, cameraRef.current);
 
@@ -313,6 +383,8 @@ export function GameCanvas({ map }: GameCanvasProps) {
     };
 
     const handleMouseDown = (e: MouseEvent) => {
+      const isMultiplayer = Boolean(useNetworkStore.getState().roomCode);
+      if (!isMultiplayer && useMatchStatsStore.getState().tacticalMenuOpen) return;
       if (e.button === 0 && useCTFStore.getState().matchStatus === 'playing') {
         isMouseDown = true;
         handleFire();
@@ -323,6 +395,14 @@ export function GameCanvas({ map }: GameCanvasProps) {
       isMouseDown = false;
     };
 
+    const handleWheel = (e: WheelEvent) => {
+      if (e.deltaY === 0) return;
+      e.preventDefault();
+      const { width: viewW, height: viewH } = viewportRef.current;
+      const step = e.deltaY < 0 ? 0.08 : -0.08;
+      adjustZoomByDelta(step, viewW, viewH);
+    };
+
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('blur', clearAllInputs);
@@ -330,6 +410,7 @@ export function GameCanvas({ map }: GameCanvasProps) {
     canvas.addEventListener('mousemove', handleMouseMove);
     canvas.addEventListener('mouseleave', handleMouseLeave);
     canvas.addEventListener('mousedown', handleMouseDown);
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
     window.addEventListener('mouseup', handleMouseUp);
 
     const loop = (timestamp: number) => {
@@ -394,6 +475,7 @@ export function GameCanvas({ map }: GameCanvasProps) {
       canvas.removeEventListener('mousemove', handleMouseMove);
       canvas.removeEventListener('mouseleave', handleMouseLeave);
       canvas.removeEventListener('mousedown', handleMouseDown);
+      canvas.removeEventListener('wheel', handleWheel);
       window.removeEventListener('mouseup', handleMouseUp);
       sounds.setJetpackBoosting(false);
     };

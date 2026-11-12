@@ -45,6 +45,12 @@ export function OrbitalHangarCanvas({ avatar, defaultWeapon }: OrbitalHangarCanv
     y: 0,
     active: false,
   });
+  const activeDragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    moved: boolean;
+  } | null>(null);
   const tracersRef = useRef<HangarTracer[]>([]);
   const sparksRef = useRef<HangarSpark[]>([]);
   const soldierPosRef = useRef<{ x: number; y: number; aimAngle: number }>({
@@ -83,13 +89,15 @@ export function OrbitalHangarCanvas({ avatar, defaultWeapon }: OrbitalHangarCanv
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
 
-    const handleMouseMove = (e: MouseEvent) => {
-      pointerRef.current = { x: e.clientX, y: e.clientY, active: true };
+    const handlePointerMoveGlobal = (e: PointerEvent) => {
+      if (e.pointerType === 'mouse' || activeDragRef.current?.pointerId === e.pointerId) {
+        pointerRef.current = { x: e.clientX, y: e.clientY, active: true };
+      }
     };
 
     resize();
     window.addEventListener('resize', resize);
-    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    window.addEventListener('pointermove', handlePointerMoveGlobal, { passive: true });
 
     let animId = 0;
     let lastTime = performance.now();
@@ -103,8 +111,8 @@ export function OrbitalHangarCanvas({ avatar, defaultWeapon }: OrbitalHangarCanv
 
       const w = window.innerWidth;
       const h = window.innerHeight;
-      const isPortrait = w < 640;
-      const isShortLandscape = !isPortrait && h < 520;
+      const isShortLandscape = h < 520 && w >= h;
+      const isPortrait = !isShortLandscape && w < 640;
       const { avatar: currentAvatar, defaultWeapon: currentWeapon } = stageStateRef.current;
 
       // 1. Deep Space Orbital Backdrop
@@ -336,13 +344,14 @@ export function OrbitalHangarCanvas({ avatar, defaultWeapon }: OrbitalHangarCanv
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', resize);
-      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('pointermove', handlePointerMoveGlobal);
     };
   }, []);
 
-  const handleStageCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const fireStageTestShot = (clientX: number, clientY: number) => {
     const pos = soldierPosRef.current;
-    const angle = Math.atan2(e.clientY - pos.y, e.clientX - pos.x);
+    const angle = Math.atan2(clientY - pos.y, clientX - pos.x);
+    pointerRef.current = { x: clientX, y: clientY, active: true };
     const wCfg = WEAPONS[defaultWeapon];
     sounds.playWeaponSound(defaultWeapon);
 
@@ -374,12 +383,53 @@ export function OrbitalHangarCanvas({ avatar, defaultWeapon }: OrbitalHangarCanv
     }
   };
 
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    pointerRef.current = { x: e.clientX, y: e.clientY, active: true };
+    activeDragRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      moved: false,
+    };
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const drag = activeDragRef.current;
+    if (drag && drag.pointerId === e.pointerId) {
+      pointerRef.current = { x: e.clientX, y: e.clientY, active: true };
+      if (!drag.moved && Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) > 12) {
+        drag.moved = true;
+      }
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const drag = activeDragRef.current;
+    if (drag && drag.pointerId === e.pointerId) {
+      const wasTap = !drag.moved;
+      activeDragRef.current = null;
+      if (wasTap) {
+        fireStageTestShot(e.clientX, e.clientY);
+      }
+    }
+  };
+
+  const handlePointerCancel = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (activeDragRef.current?.pointerId === e.pointerId) {
+      activeDragRef.current = null;
+    }
+  };
+
   return (
     <canvas
       ref={canvasRef}
-      onClick={handleStageCanvasClick}
-      className="fixed inset-0 w-full h-full block cursor-crosshair z-0"
-      title="Move cursor to aim • Click hangar bay to test-fire weapon"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+      className="fixed inset-0 w-full h-full block cursor-crosshair z-0 touch-none"
+      title="Move or drag to aim • Tap hangar bay to test-fire weapon"
     />
   );
 }

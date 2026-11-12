@@ -2,6 +2,10 @@ import type { Player, InputState } from './types';
 import type { GameMap } from '../map/types';
 import { sounds } from '../audio/soundEngine';
 import { pickTeamSpawn } from './playerStore';
+import {
+  probeWalkableSurfaceBelow,
+  resolveCapsuleVsTerrainShapes,
+} from '../map/terrainGeometry';
 
 // Reference physics tuned at 60 FPS and scaled cleanly by delta-time (dt * 60)
 // so 60Hz, 90Hz, and 120Hz displays feel identical and responsive.
@@ -229,101 +233,196 @@ export function updatePlayer(
   }
 
   // 5. Tentative Next Position (Midpoint velocity integration)
-  let nextX = x + ((prevVx + vx) * 0.5) * dtScale;
-  let nextY = y + ((prevVy + vy) * 0.5) * dtScale;
+  const totalDx = ((prevVx + vx) * 0.5) * dtScale;
+  const totalDy = ((prevVy + vy) * 0.5) * dtScale;
+  const hasTerrainShapes = Boolean(map.terrainShapes && map.terrainShapes.length > 0);
+  const substeps = hasTerrainShapes
+    ? Math.max(1, Math.min(4, Math.ceil(Math.hypot(totalDx, totalDy) / 7)))
+    : 1;
+  const stepDx = totalDx / substeps;
+  const stepDy = totalDy / substeps;
+
+  let curX = x;
+  let curY = y;
+  let nextX = x;
+  let nextY = y;
   const halfW = PLAYER_HALF_WIDTH;
   const halfH = PLAYER_HALF_HEIGHT;
   let isGrounded = false;
+  let groundNy = -1;
 
-  // 6. Separated Axis Obstacle Collisions (X pass then Y pass prevents corner snagging)
-  // 6a. Horizontal pass against solid walls/ground using swept edge tests + penetration fallback
-  for (const obs of map.obstacles) {
-    if (obs.type !== 'wall' && obs.type !== 'ground') continue;
+  for (let step = 0; step < substeps; step++) {
+    nextX = curX + stepDx;
+    nextY = curY + stepDy;
 
-    if (y + halfH <= obs.y + 0.01 || y - halfH >= obs.y + obs.height - 0.01) {
-      continue;
-    }
+    // 6. Separated Axis Obstacle Collisions (X pass then Y pass prevents corner snagging)
+    // 6a. Horizontal pass against solid walls/ground using swept edge tests + penetration fallback
+    for (const obs of map.obstacles) {
+      if (obs.type !== 'wall' && obs.type !== 'ground') continue;
 
-    const sweptRight = nextX > x && x + halfW <= obs.x + 4 && nextX + halfW > obs.x;
-    const sweptLeft =
-      nextX < x && x - halfW >= obs.x + obs.width - 4 && nextX - halfW < obs.x + obs.width;
-
-    if (sweptRight) {
-      const clamped = obs.x - halfW;
-      if (nextX > clamped) {
-        nextX = clamped;
+      if (curY + halfH <= obs.y + 0.01 || curY - halfH >= obs.y + obs.height - 0.01) {
+        continue;
       }
-      if (vx > 0) vx = 0;
-    } else if (sweptLeft) {
-      const clamped = obs.x + obs.width + halfW;
-      if (nextX < clamped) {
-        nextX = clamped;
-      }
-      if (vx < 0) vx = 0;
-    } else if (nextX + halfW > obs.x && nextX - halfW < obs.x + obs.width) {
-      const pushLeft = nextX + halfW - obs.x;
-      const pushRight = obs.x + obs.width - (nextX - halfW);
-      const horizPen = Math.min(pushLeft, pushRight);
-      const vertPen = Math.min(y + halfH - obs.y, obs.y + obs.height - (y - halfH));
-      if (horizPen <= vertPen) {
-        if (pushLeft <= pushRight) {
-          nextX = obs.x - halfW;
-          if (vx > 0) vx = 0;
-        } else {
-          nextX = obs.x + obs.width + halfW;
-          if (vx < 0) vx = 0;
+
+      const sweptRight = nextX > curX && curX + halfW <= obs.x + 4 && nextX + halfW > obs.x;
+      const sweptLeft =
+        nextX < curX && curX - halfW >= obs.x + obs.width - 4 && nextX - halfW < obs.x + obs.width;
+
+      if (sweptRight) {
+        const clamped = obs.x - halfW;
+        if (nextX > clamped) {
+          nextX = clamped;
+        }
+        if (vx > 0) vx = 0;
+      } else if (sweptLeft) {
+        const clamped = obs.x + obs.width + halfW;
+        if (nextX < clamped) {
+          nextX = clamped;
+        }
+        if (vx < 0) vx = 0;
+      } else if (nextX + halfW > obs.x && nextX - halfW < obs.x + obs.width) {
+        const pushLeft = nextX + halfW - obs.x;
+        const pushRight = obs.x + obs.width - (nextX - halfW);
+        const horizPen = Math.min(pushLeft, pushRight);
+        const vertPen = Math.min(curY + halfH - obs.y, obs.y + obs.height - (curY - halfH));
+        if (horizPen <= vertPen) {
+          if (pushLeft <= pushRight) {
+            nextX = obs.x - halfW;
+            if (vx > 0) vx = 0;
+          } else {
+            nextX = obs.x + obs.width + halfW;
+            if (vx < 0) vx = 0;
+          }
         }
       }
     }
-  }
 
-  if (nextX - halfW < 0) {
-    nextX = halfW;
-    vx = 0;
-  } else if (nextX + halfW > map.width) {
-    nextX = map.width - halfW;
-    vx = 0;
-  }
-
-  // 6b. Vertical pass against solid walls/ground + one-way platforms
-  for (const obs of map.obstacles) {
-    if (obs.type === 'hazard') continue;
-
-    if (nextX + halfW <= obs.x + 0.01 || nextX - halfW >= obs.x + obs.width - 0.01) {
-      continue;
+    if (nextX - halfW < 0) {
+      nextX = halfW;
+      vx = 0;
+    } else if (nextX + halfW > map.width) {
+      nextX = map.width - halfW;
+      vx = 0;
     }
 
-    if (obs.type === 'wall' || obs.type === 'ground') {
-      if (vy >= 0 && y + halfH <= obs.y + 6 && nextY + halfH >= obs.y) {
-        nextY = obs.y - halfH;
-        vy = 0;
-        isGrounded = true;
-      } else if (
-        vy <= 0 &&
-        y - halfH >= obs.y + obs.height - 6 &&
-        nextY - halfH <= obs.y + obs.height
-      ) {
-        nextY = obs.y + obs.height + halfH;
-        vy = 0;
-      } else if (nextY + halfH > obs.y && nextY - halfH < obs.y + obs.height) {
-        const pushUp = nextY + halfH - obs.y;
-        const pushDown = obs.y + obs.height - (nextY - halfH);
-        if (pushUp <= pushDown) {
+    // 6b. Vertical pass against solid walls/ground + one-way platforms
+    for (const obs of map.obstacles) {
+      if (obs.type === 'hazard') continue;
+
+      if (nextX + halfW <= obs.x + 0.01 || nextX - halfW >= obs.x + obs.width - 0.01) {
+        continue;
+      }
+
+      if (obs.type === 'wall' || obs.type === 'ground') {
+        if (vy >= 0 && curY + halfH <= obs.y + 6 && nextY + halfH >= obs.y) {
           nextY = obs.y - halfH;
-          if (vy > 0) vy = 0;
+          vy = 0;
           isGrounded = true;
-        } else {
+          groundNy = -1;
+        } else if (
+          vy <= 0 &&
+          curY - halfH >= obs.y + obs.height - 6 &&
+          nextY - halfH <= obs.y + obs.height
+        ) {
           nextY = obs.y + obs.height + halfH;
-          if (vy < 0) vy = 0;
+          vy = 0;
+        } else if (nextY + halfH > obs.y && nextY - halfH < obs.y + obs.height) {
+          const pushUp = nextY + halfH - obs.y;
+          const pushDown = obs.y + obs.height - (nextY - halfH);
+          if (pushUp <= pushDown) {
+            nextY = obs.y - halfH;
+            if (vy > 0) vy = 0;
+            isGrounded = true;
+            groundNy = -1;
+          } else {
+            nextY = obs.y + obs.height + halfH;
+            if (vy < 0) vy = 0;
+          }
+        }
+      } else {
+        // Platform (One-way jump-through unless holding down / drop-through active)
+        if (dropThroughTimer <= 0 && !wantsDropThrough && vy >= 0 && curY + halfH <= obs.y + 6 && nextY + halfH >= obs.y) {
+          nextY = obs.y - halfH;
+          vy = 0;
+          isGrounded = true;
+          groundNy = -1;
         }
       }
-    } else {
-      // Platform (One-way jump-through unless holding down / drop-through active)
-      if (dropThroughTimer <= 0 && !wantsDropThrough && vy >= 0 && y + halfH <= obs.y + 6 && nextY + halfH >= obs.y) {
-        nextY = obs.y - halfH;
-        vy = 0;
+    }
+
+    // 6b-bis. Sloped & curved terrain resolution (capsule pushout + half-pipe tangent glide)
+    if (hasTerrainShapes) {
+      const terrainRes = resolveCapsuleVsTerrainShapes(
+        nextX,
+        nextY,
+        vx,
+        vy,
+        halfW,
+        halfH,
+        map,
+      );
+      nextX = terrainRes.x;
+      nextY = terrainRes.y;
+      vx = terrainRes.vx;
+      vy = terrainRes.vy;
+      if (terrainRes.isGrounded) {
         isGrounded = true;
+        groundNy = terrainRes.groundNy;
       }
+      if (nextX - halfW < 0) {
+        nextX = halfW;
+        if (vx < 0) vx = 0;
+      } else if (nextX + halfW > map.width) {
+        nextX = map.width - halfW;
+        if (vx > 0) vx = 0;
+      }
+    }
+
+    curX = nextX;
+    curY = nextY;
+  }
+
+  // Smooth downhill slope snapping so runners don't hop across convex hills/ramps
+  if (
+    hasTerrainShapes &&
+    wasGrounded &&
+    !isGrounded &&
+    !isBoosting &&
+    !wantsDropThrough &&
+    bounceCooldownTimer <= 0 &&
+    vy >= -0.4 &&
+    Math.abs(nextX - x) > 0.05
+  ) {
+    const snap = probeWalkableSurfaceBelow(nextX, nextY + halfH, 10, map);
+    if (snap) {
+      nextY = snap.snapY - halfH;
+      isGrounded = true;
+      groundNy = snap.ny;
+      const vn = vx * snap.nx + vy * snap.ny;
+      if (vn < 0) {
+        vx -= vn * snap.nx;
+        vy -= vn * snap.ny;
+      }
+    }
+  }
+
+  // Keep standing pilots steady on angled ramps when idle
+  if (
+    hasTerrainShapes &&
+    wasGrounded &&
+    isGrounded &&
+    groundNy > -0.995 &&
+    !isBoosting &&
+    !hasHorizInput &&
+    dashActiveTimer <= 0 &&
+    bounceCooldownTimer <= 0 &&
+    Math.hypot(vx, vy) < 0.85
+  ) {
+    vx = 0;
+    vy = 0;
+    if (Math.hypot(nextX - x, nextY - y) < 0.45) {
+      nextX = x;
+      nextY = y;
     }
   }
 

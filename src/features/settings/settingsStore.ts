@@ -2,9 +2,14 @@ import { create } from 'zustand';
 import type { WeaponType } from '../combat/types';
 import { sounds } from '../audio/soundEngine';
 import { music } from '../audio/musicEngine';
+import { DEFAULT_CAMERA_ZOOM, clampCameraZoom } from '../camera/cameraMath';
 
 export type DefaultRadarMode = 'compact' | 'expanded' | 'hidden';
 export type SettingsTab = 'avatar' | 'audio' | 'display' | 'controls';
+export type CameraZoomMode = 'auto' | 'custom';
+export type HudScale = 'compact' | 'standard' | 'large';
+export type TouchAimMode = 'instant' | 'precision';
+export type TouchLayout = 'right_handed' | 'left_handed';
 
 export interface GameSettings {
   masterVolume: number;
@@ -17,6 +22,15 @@ export interface GameSettings {
   defaultRadarMode: DefaultRadarMode;
   showTouchHints: boolean;
   defaultWeapon: WeaponType;
+  cameraZoomMode: CameraZoomMode;
+  cameraZoom: number;
+  hudScale: HudScale;
+  highContrastTeamMarkers: boolean;
+  touchAimMode: TouchAimMode;
+  touchLayout: TouchLayout;
+  touchAimLine: boolean;
+  hapticsEnabled: boolean;
+  showTouchBoostButton: boolean;
 }
 
 const SETTINGS_STORAGE_KEY = 'aerostrike_settings_v1';
@@ -32,10 +46,23 @@ export const DEFAULT_SETTINGS: GameSettings = {
   defaultRadarMode: 'compact',
   showTouchHints: true,
   defaultWeapon: 'rifle',
+  cameraZoomMode: 'auto',
+  cameraZoom: DEFAULT_CAMERA_ZOOM,
+  hudScale: 'standard',
+  highContrastTeamMarkers: false,
+  touchAimMode: 'instant',
+  touchLayout: 'right_handed',
+  touchAimLine: true,
+  hapticsEnabled: true,
+  showTouchBoostButton: true,
 };
 
 const VALID_RADAR_MODES: DefaultRadarMode[] = ['compact', 'expanded', 'hidden'];
 const VALID_WEAPONS: WeaponType[] = ['rifle', 'shotgun', 'sniper', 'rocket', 'pistol'];
+const VALID_ZOOM_MODES: CameraZoomMode[] = ['auto', 'custom'];
+const VALID_HUD_SCALES: HudScale[] = ['compact', 'standard', 'large'];
+const VALID_TOUCH_AIM_MODES: TouchAimMode[] = ['instant', 'precision'];
+const VALID_TOUCH_LAYOUTS: TouchLayout[] = ['right_handed', 'left_handed'];
 
 function loadStoredSettings(): GameSettings {
   try {
@@ -81,6 +108,38 @@ function loadStoredSettings(): GameSettings {
       defaultWeapon: VALID_WEAPONS.includes(parsed.defaultWeapon as WeaponType)
         ? (parsed.defaultWeapon as WeaponType)
         : DEFAULT_SETTINGS.defaultWeapon,
+      cameraZoomMode: VALID_ZOOM_MODES.includes(parsed.cameraZoomMode as CameraZoomMode)
+        ? (parsed.cameraZoomMode as CameraZoomMode)
+        : DEFAULT_SETTINGS.cameraZoomMode,
+      cameraZoom:
+        typeof parsed.cameraZoom === 'number'
+          ? clampCameraZoom(parsed.cameraZoom)
+          : DEFAULT_SETTINGS.cameraZoom,
+      hudScale: VALID_HUD_SCALES.includes(parsed.hudScale as HudScale)
+        ? (parsed.hudScale as HudScale)
+        : DEFAULT_SETTINGS.hudScale,
+      highContrastTeamMarkers:
+        typeof parsed.highContrastTeamMarkers === 'boolean'
+          ? parsed.highContrastTeamMarkers
+          : DEFAULT_SETTINGS.highContrastTeamMarkers,
+      touchAimMode: VALID_TOUCH_AIM_MODES.includes(parsed.touchAimMode as TouchAimMode)
+        ? (parsed.touchAimMode as TouchAimMode)
+        : DEFAULT_SETTINGS.touchAimMode,
+      touchLayout: VALID_TOUCH_LAYOUTS.includes(parsed.touchLayout as TouchLayout)
+        ? (parsed.touchLayout as TouchLayout)
+        : DEFAULT_SETTINGS.touchLayout,
+      touchAimLine:
+        typeof parsed.touchAimLine === 'boolean'
+          ? parsed.touchAimLine
+          : DEFAULT_SETTINGS.touchAimLine,
+      hapticsEnabled:
+        typeof parsed.hapticsEnabled === 'boolean'
+          ? parsed.hapticsEnabled
+          : DEFAULT_SETTINGS.hapticsEnabled,
+      showTouchBoostButton:
+        typeof parsed.showTouchBoostButton === 'boolean'
+          ? parsed.showTouchBoostButton
+          : DEFAULT_SETTINGS.showTouchBoostButton,
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -135,6 +194,19 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         defaultRadarMode: patch.defaultRadarMode ?? state.defaultRadarMode,
         showTouchHints: patch.showTouchHints ?? state.showTouchHints,
         defaultWeapon: patch.defaultWeapon ?? state.defaultWeapon,
+        cameraZoomMode: patch.cameraZoomMode ?? state.cameraZoomMode,
+        cameraZoom:
+          patch.cameraZoom !== undefined
+            ? clampCameraZoom(patch.cameraZoom)
+            : state.cameraZoom,
+        hudScale: patch.hudScale ?? state.hudScale,
+        highContrastTeamMarkers:
+          patch.highContrastTeamMarkers ?? state.highContrastTeamMarkers,
+        touchAimMode: patch.touchAimMode ?? state.touchAimMode,
+        touchLayout: patch.touchLayout ?? state.touchLayout,
+        touchAimLine: patch.touchAimLine ?? state.touchAimLine,
+        hapticsEnabled: patch.hapticsEnabled ?? state.hapticsEnabled,
+        showTouchBoostButton: patch.showTouchBoostButton ?? state.showTouchBoostButton,
       };
       persistSettings(next);
       return next;

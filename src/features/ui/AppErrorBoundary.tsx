@@ -45,10 +45,10 @@ export class AppErrorBoundary extends Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen w-full flex items-center justify-center p-4 cyber-grid-bg text-slate-100 select-none">
-          <div className="cyber-panel-red rounded-3xl p-6 sm:p-8 max-w-md w-full flex flex-col items-center text-center gap-4 border border-rose-500/60 glow-red">
-            <div className="w-14 h-14 rounded-2xl bg-rose-950/90 border border-rose-500/60 flex items-center justify-center text-rose-400">
-              <ShieldAlert className="w-7 h-7" />
+        <div className="min-h-[100dvh] w-full safe-insets flex items-center justify-center p-3 sm:p-4 cyber-grid-bg text-slate-100 select-none">
+          <div className="cyber-panel-red rounded-3xl max-w-md w-full max-h-[92dvh] overflow-y-auto cyber-scroll p-5 sm:tall:p-8 short:p-4 flex flex-col items-center text-center gap-3.5 sm:tall:gap-4 border border-rose-500/60 glow-red">
+            <div className="w-12 h-12 sm:tall:w-14 sm:tall:h-14 rounded-2xl bg-rose-950/90 border border-rose-500/60 flex items-center justify-center text-rose-400 shrink-0">
+              <ShieldAlert className="w-6 h-6 sm:tall:w-7 sm:tall:h-7" />
             </div>
 
             <div>

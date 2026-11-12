@@ -47,20 +47,20 @@ export function TheaterSelectModal({
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-3 sm:p-4 animate-in fade-in duration-150 select-none"
+      className="fixed inset-0 z-50 safe-insets flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-2.5 sm:p-4 animate-in fade-in duration-150 select-none"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="cyber-panel clip-chamfer-lg shadow-2xl w-full max-w-2xl max-h-[90dvh] flex flex-col overflow-hidden border border-cyan-500/50 glow-cyan animate-in zoom-in-95 duration-150"
+        className="cyber-panel clip-chamfer-lg shadow-2xl w-full max-w-2xl max-h-[92dvh] flex flex-col overflow-hidden border border-cyan-500/50 glow-cyan animate-in zoom-in-95 duration-150"
       >
-        <div className="shrink-0 flex items-center justify-between px-4 sm:px-5 py-3 border-b border-cyan-500/20 bg-slate-950/90">
-          <div className="flex items-center gap-2">
-            <MapIcon className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400" />
-            <div>
-              <h3 className="text-xs sm:text-sm font-black text-white tracking-wider uppercase font-mono">
+        <div className="shrink-0 flex items-center justify-between px-4 sm:px-5 py-2.5 sm:tall:py-3 border-b border-cyan-500/20 bg-slate-950/90">
+          <div className="flex items-center gap-2 min-w-0">
+            <MapIcon className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400 shrink-0" />
+            <div className="min-w-0">
+              <h3 className="text-xs sm:text-sm font-black text-white tracking-wider uppercase font-mono truncate">
                 Select Combat Theater
               </h3>
-              <span className="text-[9px] font-mono text-slate-400 uppercase block">
+              <span className="text-[9px] font-mono text-slate-400 uppercase block truncate">
                 {isHost
                   ? 'Host chooses arena for squad deployment'
                   : 'Active arena controlled by room host'}
@@ -73,15 +73,15 @@ export function TheaterSelectModal({
               sounds.playUiClick();
               onClose();
             }}
-            className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-900 border border-slate-700 hover:border-rose-500/60 hover:bg-rose-950/60 text-slate-300 hover:text-white text-[10px] font-mono font-bold uppercase clip-chamfer cursor-pointer"
+            className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 bg-slate-900 border border-slate-700 hover:border-rose-500/60 hover:bg-rose-950/60 text-slate-300 hover:text-white text-[10px] font-mono font-bold uppercase clip-chamfer cursor-pointer"
           >
             <X className="w-3.5 h-3.5 text-rose-400" />
             <span>Close</span>
           </button>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-5 bg-slate-950/60">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="flex-1 min-h-0 overflow-y-auto cyber-scroll p-3.5 sm:tall:p-5 short:p-3 bg-slate-950/60">
+          <div className="grid grid-cols-1 short-wide:grid-cols-3 sm:grid-cols-3 gap-2.5 sm:gap-3">
             {Object.values(availableMaps).map((m) => {
               const isSelected = selectedMap.id === m.id;
               return (
@@ -90,7 +90,7 @@ export function TheaterSelectModal({
                   type="button"
                   disabled={!isHost}
                   onClick={() => onSelectMap(m.id)}
-                  className={`text-left p-2.5 border transition-all flex sm:flex-col items-center sm:items-stretch gap-3 sm:gap-2.5 clip-chamfer ${
+                  className={`text-left p-2.5 short:p-2 border transition-all flex short-wide:flex-col sm:flex-col items-center short-wide:items-stretch sm:items-stretch gap-3 sm:gap-2.5 clip-chamfer ${
                     isSelected
                       ? 'bg-cyan-950/45 border-cyan-400 glow-cyan'
                       : isHost
@@ -100,7 +100,7 @@ export function TheaterSelectModal({
                 >
                   <MapSchematicPreview map={m} isSelected={isSelected} size="card" />
 
-                  <div className="flex-1 sm:flex-none flex items-center justify-between gap-2 min-w-0">
+                  <div className="flex-1 short-wide:flex-none sm:flex-none flex items-center justify-between gap-2 min-w-0">
                     <div className="min-w-0">
                       <div className="text-xs font-black text-white truncate">
                         {getCleanMapTitle(m)}
@@ -236,20 +236,20 @@ export function SquadRosterModal({
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-3 sm:p-4 animate-in fade-in duration-150 select-none"
+      className="fixed inset-0 z-50 safe-insets flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-2.5 sm:p-4 animate-in fade-in duration-150 select-none"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="cyber-panel clip-chamfer-lg shadow-2xl w-full max-w-xl max-h-[90dvh] flex flex-col overflow-hidden border border-cyan-500/50 glow-cyan animate-in zoom-in-95 duration-150"
+        className="cyber-panel clip-chamfer-lg shadow-2xl w-full max-w-xl max-h-[92dvh] flex flex-col overflow-hidden border border-cyan-500/50 glow-cyan animate-in zoom-in-95 duration-150"
       >
-        <div className="shrink-0 flex items-center justify-between px-4 sm:px-5 py-3 border-b border-cyan-500/20 bg-slate-950/90">
-          <div className="flex items-center gap-2">
-            <Users className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400" />
-            <div>
-              <h3 className="text-xs sm:text-sm font-black text-white tracking-wider uppercase font-mono">
+        <div className="shrink-0 flex items-center justify-between px-4 sm:px-5 py-2.5 sm:tall:py-3 border-b border-cyan-500/20 bg-slate-950/90">
+          <div className="flex items-center gap-2 min-w-0">
+            <Users className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400 shrink-0" />
+            <div className="min-w-0">
+              <h3 className="text-xs sm:text-sm font-black text-white tracking-wider uppercase font-mono truncate">
                 Squad Roster ({totalPlayers})
               </h3>
-              <span className="text-[9px] font-mono text-emerald-400 uppercase block">
+              <span className="text-[9px] font-mono text-emerald-400 uppercase block truncate">
                 {readyCount}/{totalPlayers} Pilots Ready for Drop
               </span>
             </div>
@@ -260,15 +260,15 @@ export function SquadRosterModal({
               sounds.playUiClick();
               onClose();
             }}
-            className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-900 border border-slate-700 hover:border-rose-500/60 hover:bg-rose-950/60 text-slate-300 hover:text-white text-[10px] font-mono font-bold uppercase clip-chamfer cursor-pointer"
+            className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 bg-slate-900 border border-slate-700 hover:border-rose-500/60 hover:bg-rose-950/60 text-slate-300 hover:text-white text-[10px] font-mono font-bold uppercase clip-chamfer cursor-pointer"
           >
             <X className="w-3.5 h-3.5 text-rose-400" />
             <span>Close</span>
           </button>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-5 bg-slate-950/60">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="flex-1 min-h-0 overflow-y-auto cyber-scroll p-3.5 sm:tall:p-5 short:p-3 bg-slate-950/60">
+          <div className="grid grid-cols-1 short-wide:grid-cols-2 sm:grid-cols-2 gap-3">
             {/* Blue Squad Column */}
             <div className="bg-slate-950/75 border border-cyan-500/35 p-3 clip-chamfer flex flex-col gap-2">
               <div className="flex items-center justify-between border-b border-cyan-500/20 pb-2">
@@ -361,20 +361,20 @@ export function MatchRulesModal({
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-3 sm:p-4 animate-in fade-in duration-150 select-none"
+      className="fixed inset-0 z-50 safe-insets flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-2.5 sm:p-4 animate-in fade-in duration-150 select-none"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="cyber-panel clip-chamfer-lg shadow-2xl w-full max-w-lg max-h-[90dvh] flex flex-col overflow-hidden border border-amber-500/45 glow-amber animate-in zoom-in-95 duration-150"
+        className="cyber-panel clip-chamfer-lg shadow-2xl w-full max-w-lg max-h-[92dvh] flex flex-col overflow-hidden border border-amber-500/45 glow-amber animate-in zoom-in-95 duration-150"
       >
-        <div className="shrink-0 flex items-center justify-between px-4 sm:px-5 py-3 border-b border-amber-500/20 bg-slate-950/90">
-          <div className="flex items-center gap-2">
-            <SlidersHorizontal className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />
-            <div>
-              <h3 className="text-xs sm:text-sm font-black text-white tracking-wider uppercase font-mono">
+        <div className="shrink-0 flex items-center justify-between px-4 sm:px-5 py-2.5 sm:tall:py-3 border-b border-amber-500/20 bg-slate-950/90">
+          <div className="flex items-center gap-2 min-w-0">
+            <SlidersHorizontal className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0" />
+            <div className="min-w-0">
+              <h3 className="text-xs sm:text-sm font-black text-white tracking-wider uppercase font-mono truncate">
                 Match Rules &amp; Engagement
               </h3>
-              <span className="text-[9px] font-mono text-slate-400 uppercase block">
+              <span className="text-[9px] font-mono text-slate-400 uppercase block truncate">
                 {isHost
                   ? 'Changes broadcast live to all connected cadets'
                   : 'Rules locked & synchronized by squad host'}
@@ -387,26 +387,26 @@ export function MatchRulesModal({
               sounds.playUiClick();
               onClose();
             }}
-            className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-900 border border-slate-700 hover:border-rose-500/60 hover:bg-rose-950/60 text-slate-300 hover:text-white text-[10px] font-mono font-bold uppercase clip-chamfer cursor-pointer"
+            className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 bg-slate-900 border border-slate-700 hover:border-rose-500/60 hover:bg-rose-950/60 text-slate-300 hover:text-white text-[10px] font-mono font-bold uppercase clip-chamfer cursor-pointer"
           >
             <X className="w-3.5 h-3.5 text-rose-400" />
             <span>Close</span>
           </button>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 bg-slate-950/65 space-y-5">
+        <div className="flex-1 min-h-0 overflow-y-auto cyber-scroll p-3.5 sm:tall:p-5 short:p-3 bg-slate-950/65 space-y-4 sm:tall:space-y-5 short:space-y-3">
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider text-cyan-300">
-                <Trophy className="w-3.5 h-3.5 text-amber-400" />
+            <div className="flex items-center justify-between gap-2 mb-1.5 sm:tall:mb-2">
+              <span className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-cyan-300">
+                <Trophy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 Capture Limit (First To)
               </span>
-              <span className="text-[10px] font-mono text-slate-400">
+              <span className="text-[10px] font-mono text-slate-400 shrink-0">
                 {matchRules.targetCaptures}{' '}
                 {matchRules.targetCaptures === 1 ? 'Capture' : 'Captures'}
               </span>
             </div>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
               {([1, 3, 5, 7] as TargetCapturesPreset[]).map((cap) => {
                 const active = matchRules.targetCaptures === cap;
                 return (
@@ -415,7 +415,7 @@ export function MatchRulesModal({
                     type="button"
                     disabled={!isHost}
                     onClick={() => onUpdateRules({ targetCaptures: cap })}
-                    className={`py-2 px-2 border text-xs font-mono font-black uppercase clip-chamfer transition ${
+                    className={`py-2 short:py-1.5 px-1.5 sm:px-2 border text-[11px] sm:text-xs font-mono font-black uppercase clip-chamfer transition ${
                       active
                         ? 'bg-cyan-500/25 border-cyan-400 text-cyan-200 glow-cyan'
                         : isHost
@@ -431,18 +431,18 @@ export function MatchRulesModal({
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider text-cyan-300">
-                <Clock className="w-3.5 h-3.5 text-cyan-400" />
+            <div className="flex items-center justify-between gap-2 mb-1.5 sm:tall:mb-2">
+              <span className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-cyan-300">
+                <Clock className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
                 Match Clock
               </span>
-              <span className="text-[10px] font-mono text-slate-400">
+              <span className="text-[10px] font-mono text-slate-400 shrink-0">
                 {matchRules.timeLimitSec === 0
                   ? 'No Time Limit'
-                  : `${formatClockPreset(matchRules.timeLimitSec)} + Sudden-Death OT`}
+                  : `${formatClockPreset(matchRules.timeLimitSec)} + OT`}
               </span>
             </div>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
               {([0, 180, 300, 480] as MatchTimeLimitPreset[]).map((sec) => {
                 const active = matchRules.timeLimitSec === sec;
                 return (
@@ -451,7 +451,7 @@ export function MatchRulesModal({
                     type="button"
                     disabled={!isHost}
                     onClick={() => onUpdateRules({ timeLimitSec: sec })}
-                    className={`py-2 px-2 border text-xs font-mono font-black uppercase clip-chamfer transition ${
+                    className={`py-2 short:py-1.5 px-1 sm:px-2 border text-[10px] xs:text-[11px] sm:text-xs font-mono font-black uppercase clip-chamfer transition ${
                       active
                         ? 'bg-cyan-500/25 border-cyan-400 text-cyan-200 glow-cyan'
                         : isHost
@@ -465,23 +465,23 @@ export function MatchRulesModal({
               })}
             </div>
             {matchRules.timeLimitSec > 0 && (
-              <p className="text-[10px] font-mono text-amber-300/85 mt-1.5">
+              <p className="text-[10px] font-mono text-amber-300/85 mt-1.5 leading-snug">
                 If tied when the clock hits 0:00, Sudden-Death Overtime begins — next capture wins!
               </p>
             )}
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider text-cyan-300">
-                <TimerReset className="w-3.5 h-3.5 text-emerald-400" />
+            <div className="flex items-center justify-between gap-2 mb-1.5 sm:tall:mb-2">
+              <span className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-cyan-300">
+                <TimerReset className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                 Redeploy Delay
               </span>
-              <span className="text-[10px] font-mono text-slate-400">
+              <span className="text-[10px] font-mono text-slate-400 shrink-0">
                 {matchRules.respawnDelaySec}s Cooldown
               </span>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
               {(
                 [
                   { sec: 2.5, label: '2.5s Fast' },
@@ -496,7 +496,7 @@ export function MatchRulesModal({
                     type="button"
                     disabled={!isHost}
                     onClick={() => onUpdateRules({ respawnDelaySec: sec })}
-                    className={`py-2 px-2 border text-xs font-mono font-black uppercase clip-chamfer transition ${
+                    className={`py-2 short:py-1.5 px-1.5 sm:px-2 border text-[11px] sm:text-xs font-mono font-black uppercase clip-chamfer transition ${
                       active
                         ? 'bg-emerald-500/25 border-emerald-400 text-emerald-200'
                         : isHost
@@ -537,31 +537,33 @@ export function JoinRejectedModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 animate-in fade-in select-none">
-      <div className="cyber-panel-red clip-chamfer-lg p-6 sm:p-8 max-w-md w-full max-h-[90dvh] overflow-y-auto text-center flex flex-col items-center gap-5 shadow-2xl border border-rose-500/50 glow-red animate-in zoom-in-95 duration-150">
-        <div className="w-16 h-16 bg-rose-950/80 border border-rose-500/60 flex items-center justify-center text-rose-400 glow-red clip-chamfer shrink-0">
-          <ShieldAlert className="w-8 h-8" />
-        </div>
-        <div>
-          <span className="text-[10px] font-mono font-bold text-rose-400 uppercase tracking-widest block">
-            // HOST SECURITY ENFORCEMENT //
-          </span>
-          <h2 className="text-xl font-black text-white uppercase tracking-tight mt-1">
-            Deployment Restricted
-          </h2>
-          <p className="text-xs text-slate-300 mt-2 leading-relaxed">
-            {rejectionReason ||
-              'Match is currently in progress. Only enlisted squad members from the initial deployment can rejoin this battle.'}
-          </p>
-        </div>
-        <div className="w-full pt-2">
-          <button
-            type="button"
-            onClick={onLeaveRoom}
-            className="w-full py-3 bg-gradient-to-r from-rose-700 to-red-600 hover:from-rose-600 hover:to-red-500 text-white font-mono text-xs font-black uppercase tracking-wider transition cursor-pointer shadow-lg shadow-rose-950 clip-chamfer"
-          >
-            Return to Hangar
-          </button>
+    <div className="fixed inset-0 z-50 safe-insets flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-3 sm:p-4 animate-in fade-in select-none">
+      <div className="cyber-panel-red clip-chamfer-lg max-w-md w-full max-h-[92dvh] flex flex-col overflow-hidden shadow-2xl border border-rose-500/50 glow-red animate-in zoom-in-95 duration-150">
+        <div className="overflow-y-auto cyber-scroll p-5 sm:tall:p-8 short:p-4 text-center flex flex-col items-center gap-4 sm:tall:gap-5 short:gap-3">
+          <div className="w-14 h-14 sm:tall:w-16 sm:tall:h-16 short:w-11 short:h-11 bg-rose-950/80 border border-rose-500/60 flex items-center justify-center text-rose-400 glow-red clip-chamfer shrink-0">
+            <ShieldAlert className="w-7 h-7 sm:tall:w-8 sm:tall:h-8 short:w-5 short:h-5" />
+          </div>
+          <div>
+            <span className="text-[10px] font-mono font-bold text-rose-400 uppercase tracking-widest block">
+              // HOST SECURITY ENFORCEMENT //
+            </span>
+            <h2 className="text-lg sm:tall:text-xl font-black text-white uppercase tracking-tight mt-1">
+              Deployment Restricted
+            </h2>
+            <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+              {rejectionReason ||
+                'Match is currently in progress. Only enlisted squad members from the initial deployment can rejoin this battle.'}
+            </p>
+          </div>
+          <div className="w-full pt-1">
+            <button
+              type="button"
+              onClick={onLeaveRoom}
+              className="w-full py-2.5 sm:tall:py-3 bg-gradient-to-r from-rose-700 to-red-600 hover:from-rose-600 hover:to-red-500 text-white font-mono text-xs font-black uppercase tracking-wider transition cursor-pointer shadow-lg shadow-rose-950 clip-chamfer"
+            >
+              Return to Hangar
+            </button>
+          </div>
         </div>
       </div>
     </div>

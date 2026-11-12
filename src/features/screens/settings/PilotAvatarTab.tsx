@@ -249,13 +249,13 @@ export function PilotAvatarTab() {
               maxLength={16}
               value={avatar.callsign}
               onChange={(e) => setAvatar({ callsign: e.target.value })}
-              className="flex-1 bg-slate-900 border border-slate-700 focus:border-cyan-400 px-3 py-2 text-sm font-mono font-bold text-white outline-none clip-chamfer"
+              className="flex-1 min-w-0 bg-slate-900 border border-slate-700 focus:border-cyan-400 px-3 py-2 text-sm font-mono font-bold text-white outline-none clip-chamfer"
               placeholder="Callsign..."
             />
             <button
               type="button"
               onClick={handleRandomCallsign}
-              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-cyan-500/30 text-amber-400 clip-chamfer cursor-pointer"
+              className="shrink-0 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-cyan-500/30 text-amber-400 clip-chamfer cursor-pointer"
               title="Randomize Callsign"
             >
               <Dices className="w-4 h-4" />
@@ -354,7 +354,7 @@ export function PilotAvatarTab() {
                   sounds.playUiClick();
                   setAvatar({ headgear: h.id });
                 }}
-                className={`px-2.5 py-2 text-xs font-medium border transition text-center cursor-pointer clip-chamfer ${
+                className={`px-2 sm:px-2.5 py-2 text-[11px] sm:text-xs font-medium border transition text-center cursor-pointer clip-chamfer ${
                   avatar.headgear === h.id
                     ? 'bg-cyan-500/25 border-cyan-400 text-white font-bold'
                     : 'bg-slate-950/70 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
@@ -402,7 +402,7 @@ export function PilotAvatarTab() {
                     sounds.playUiClick();
                     setAvatar({ visorStyle: v.id });
                   }}
-                  className={`px-2.5 py-2 text-xs font-medium border transition text-left cursor-pointer clip-chamfer ${
+                  className={`px-2 sm:px-2.5 py-2 text-[11px] sm:text-xs font-medium border transition text-left cursor-pointer clip-chamfer ${
                     avatar.visorStyle === v.id
                       ? 'bg-cyan-500/25 border-cyan-400 text-white font-bold'
                       : 'bg-slate-950/70 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'

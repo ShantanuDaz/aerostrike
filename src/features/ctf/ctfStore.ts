@@ -12,10 +12,28 @@ import type { MatchSyncStatePayload } from '../network/types';
 import { sounds } from '../audio/soundEngine';
 import { useMatchStatsStore } from '../combat/statsStore';
 
+export type BannerTone = 'cyan' | 'blue' | 'red' | 'amber';
+
 let bannerTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let scoredResetTimeoutId: ReturnType<typeof setTimeout> | null = null;
 // High-precision float clock updated silently each frame; synced to React store at <= 1 Hz.
 let liveClockSec: number = DEFAULT_MATCH_RULES.timeLimitSec;
+
+function deriveBannerTone(
+  bannerMessage: string | null,
+  winner?: Team | null,
+  isOvertime?: boolean,
+): BannerTone {
+  if (winner === 'blue') return 'blue';
+  if (winner === 'red') return 'red';
+  if (isOvertime) return 'amber';
+  if (!bannerMessage) return 'cyan';
+  const upper = bannerMessage.toUpperCase();
+  if (upper.includes('OVERTIME')) return 'amber';
+  if (upper.includes('BLUE')) return 'blue';
+  if (upper.includes('RED')) return 'red';
+  return 'cyan';
+}
 
 function scheduleBannerClear(
   setBanner: (msg: string | null) => void,
@@ -40,6 +58,7 @@ interface CTFState {
   matchStatus: MatchStatus;
   winner: Team | null;
   bannerMessage: string | null;
+  bannerTone: BannerTone;
   stateSeq: number;
   matchGeneration: number;
   lastScorer: {
@@ -68,7 +87,7 @@ interface CTFState {
     isAuthoritativeClock?: boolean,
   ) => Team | null;
   setMatchStatus: (status: MatchStatus) => void;
-  setBanner: (msg: string | null) => void;
+  setBanner: (msg: string | null, tone?: BannerTone) => void;
   exportMatchState: () => MatchSyncStatePayload;
   applyAuthoritativeState: (payload: MatchSyncStatePayload, force?: boolean) => void;
   resetSequence: () => void;
@@ -107,6 +126,7 @@ export const useCTFStore = create<CTFState>((set, get) => ({
   matchStatus: 'playing',
   winner: null,
   bannerMessage: null,
+  bannerTone: 'cyan',
   stateSeq: 0,
   matchGeneration: 0,
   lastScorer: null,
@@ -188,6 +208,7 @@ export const useCTFStore = create<CTFState>((set, get) => ({
       winner: null,
       matchStatus: 'playing',
       bannerMessage: 'MATCH STARTED! CAPTURE THE ENEMY FLAG!',
+      bannerTone: 'cyan',
       stateSeq: state.stateSeq + 1,
       matchGeneration: state.matchGeneration + 1,
       lastScorer: null,
@@ -236,6 +257,7 @@ export const useCTFStore = create<CTFState>((set, get) => ({
       winner: null,
       matchStatus: 'playing',
       bannerMessage: 'MATCH STARTED! CAPTURE THE ENEMY FLAG!',
+      bannerTone: 'cyan',
       stateSeq: 0,
       matchGeneration: state.matchGeneration + 1,
       lastScorer: null,
@@ -282,6 +304,7 @@ export const useCTFStore = create<CTFState>((set, get) => ({
         },
       },
       bannerMessage: `${team.toUpperCase()} FLAG TAKEN`,
+      bannerTone: team,
     }));
     scheduleBannerClear((msg) => set({ bannerMessage: msg }), 2600);
     return true;
@@ -305,6 +328,7 @@ export const useCTFStore = create<CTFState>((set, get) => ({
         },
       },
       bannerMessage: `${team.toUpperCase()} FLAG DROPPED`,
+      bannerTone: team,
     }));
     scheduleBannerClear((msg) => set({ bannerMessage: msg }), 2400);
     return true;
@@ -328,6 +352,7 @@ export const useCTFStore = create<CTFState>((set, get) => ({
         },
       },
       bannerMessage: `${team.toUpperCase()} FLAG RETURNED`,
+      bannerTone: team,
     }));
     scheduleBannerClear((msg) => set({ bannerMessage: msg }), 2400);
     return true;
@@ -370,6 +395,7 @@ export const useCTFStore = create<CTFState>((set, get) => ({
           ? `OVERTIME VICTORY • TEAM ${scoringTeam.toUpperCase()} WINS!`
           : `TEAM ${scoringTeam.toUpperCase()} WINS THE MATCH!`
         : `${scoringTeam.toUpperCase()} TEAM SCORED! (${carrierName})`,
+      bannerTone: scoringTeam,
       flags: {
         ...curr.flags,
         [enemyTeam]: {
@@ -439,6 +465,7 @@ export const useCTFStore = create<CTFState>((set, get) => ({
               timeRemainingSec: 0,
               isOvertime: true,
               bannerMessage: 'SUDDEN DEATH OVERTIME • NEXT CAPTURE WINS!',
+              bannerTone: 'amber',
             }));
             scheduleBannerClear((msg) => set({ bannerMessage: msg }), 3500);
           } else {
@@ -451,6 +478,7 @@ export const useCTFStore = create<CTFState>((set, get) => ({
               matchStatus: 'game_over',
               winner: timeWinner,
               bannerMessage: `TIME EXPIRED • TEAM ${timeWinner.toUpperCase()} WINS!`,
+              bannerTone: timeWinner,
             }));
           }
         } else if (timeRemainingSec !== 0) {
@@ -465,7 +493,11 @@ export const useCTFStore = create<CTFState>((set, get) => ({
   },
 
   setMatchStatus: (matchStatus) => set({ matchStatus }),
-  setBanner: (bannerMessage) => set({ bannerMessage }),
+  setBanner: (bannerMessage, tone) =>
+    set({
+      bannerMessage,
+      bannerTone: tone ?? deriveBannerTone(bannerMessage),
+    }),
 
   exportMatchState: () => {
     const state = get();
@@ -501,9 +533,18 @@ export const useCTFStore = create<CTFState>((set, get) => ({
     const nextScoreTotal = payload.score.blue + payload.score.red;
     const nextRules = payload.matchRules
       ? sanitizeMatchRules(payload.matchRules, curr.matchRules)
-      : { ...curr.matchRules, targetCaptures: sanitizeMatchRules({ targetCaptures: payload.targetCaptures as 1 | 3 | 5 | 7 }, curr.matchRules).targetCaptures };
+      : {
+          ...curr.matchRules,
+          targetCaptures: sanitizeMatchRules(
+            { targetCaptures: payload.targetCaptures as 1 | 3 | 5 | 7 },
+            curr.matchRules,
+          ).targetCaptures,
+        };
 
-    if (nextScoreTotal > prevScoreTotal || (payload.matchStatus === 'game_over' && curr.matchStatus !== 'game_over')) {
+    if (
+      nextScoreTotal > prevScoreTotal ||
+      (payload.matchStatus === 'game_over' && curr.matchStatus !== 'game_over')
+    ) {
       sounds.playFlagCapture();
     } else if (payload.isOvertime && !curr.isOvertime) {
       sounds.playFlagPickup();
@@ -534,6 +575,11 @@ export const useCTFStore = create<CTFState>((set, get) => ({
       matchStatus: payload.matchStatus,
       winner: payload.winner,
       bannerMessage: payload.bannerMessage,
+      bannerTone: deriveBannerTone(
+        payload.bannerMessage,
+        payload.winner,
+        Boolean(payload.isOvertime),
+      ),
       lastScorer: payload.lastScorer ?? null,
       flags: {
         blue: { ...payload.flags.blue },

@@ -2,41 +2,31 @@ import type { MutableRefObject } from 'react';
 import type { GameMap } from '../map/types';
 import { renderMap, renderRefillStations } from '../map/renderMap';
 import { renderMinimap, type MinimapPlayerBlip } from '../map/renderMinimap';
+import { raycastMapTerrain } from '../map/terrainGeometry';
+import {
+  createBackdropCache,
+  renderBackdropWorldProps,
+  renderProceduralBackdrop,
+  resolveMapTheme,
+  type BackdropCache,
+} from '../map/renderBackdrop';
 import { renderPlayer, renderRagdoll, type Player, type RagdollInstance } from '../player';
-import type { Camera } from '../camera';
+import { worldToScreen, type Camera } from '../camera';
 import { renderBullets, renderParticles, renderWeaponPickups, useCombatStore } from '../combat';
+import { WEAPONS } from '../combat/weaponsConfig';
 import { renderFlags, useCTFStore } from '../ctf';
+import { useSettingsStore } from '../settings/settingsStore';
 import { engineWorld } from './engineWorld';
 
-export interface ParallaxStar {
-  x: number;
-  y: number;
-  r: number;
-  alpha: number;
-  twinkleOffset: number;
-}
-
 export interface ArenaRenderScratch {
-  stars: ParallaxStar[];
-  hazeCanvas: HTMLCanvasElement | null;
-  hazeWidth: number;
-  hazeHeight: number;
+  backdropCache: BackdropCache | null;
   remoteRenderScratch: Player;
   minimapPlayersBuf: MinimapPlayerBlip[];
 }
 
 export function createArenaRenderScratch(defaultAvatar: Player['avatar']): ArenaRenderScratch {
   return {
-    stars: Array.from({ length: 72 }, () => ({
-      x: Math.random(),
-      y: Math.random(),
-      r: 0.7 + Math.random() * 1.4,
-      alpha: 0.2 + Math.random() * 0.55,
-      twinkleOffset: Math.random() * Math.PI * 2,
-    })),
-    hazeCanvas: null,
-    hazeWidth: 0,
-    hazeHeight: 0,
+    backdropCache: null,
     remoteRenderScratch: {
       id: '',
       team: 'blue',
@@ -118,6 +108,7 @@ export function syncAndRenderMinimap(
   }
 
   const latestFlags = useCTFStore.getState().flags;
+  const highContrast = useSettingsStore.getState().highContrastTeamMarkers;
   renderMinimap(
     mmCtx,
     mm.width,
@@ -130,6 +121,7 @@ export function syncAndRenderMinimap(
       { x: latestFlags.red.x, y: latestFlags.red.y, team: 'red' },
     ],
     engineWorld.stations,
+    highContrast,
   );
 }
 
@@ -154,6 +146,61 @@ export interface RenderArenaFrameParams {
   isTouchHUD: boolean;
 }
 
+function drawOffscreenFlagIndicator(
+  ctx: CanvasRenderingContext2D,
+  worldX: number,
+  worldY: number,
+  camera: Camera,
+  viewW: number,
+  viewH: number,
+  color: string,
+  label: string | null,
+) {
+  const { screenX: scrX, screenY: scrY } = worldToScreen(worldX, worldY, camera);
+  if (scrX >= 0 && scrX <= viewW && scrY >= 0 && scrY <= viewH) {
+    return;
+  }
+
+  const marginX = 28;
+  const marginTop = 64;
+  const marginBot = 46;
+  const clampedX = Math.max(marginX, Math.min(viewW - marginX, scrX));
+  const clampedY = Math.max(marginTop, Math.min(viewH - marginBot, scrY));
+  const ang = Math.atan2(scrY - viewH / 2, scrX - viewW / 2);
+
+  ctx.save();
+  ctx.translate(clampedX, clampedY);
+
+  ctx.save();
+  ctx.rotate(ang);
+  ctx.fillStyle = color;
+  ctx.strokeStyle = '#060913';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(9, 0);
+  ctx.lineTo(-5, -6);
+  ctx.lineTo(-2, 0);
+  ctx.lineTo(-5, 6);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  if (label) {
+    ctx.font = 'bold 8.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const textOffsetY = clampedY < viewH * 0.22 ? 15 : -14;
+    ctx.strokeStyle = 'rgba(6, 9, 19, 0.92)';
+    ctx.lineWidth = 3;
+    ctx.strokeText(label, 0, textOffsetY);
+    ctx.fillStyle = color;
+    ctx.fillText(label, 0, textOffsetY);
+  }
+
+  ctx.restore();
+}
+
 export function renderArenaFrame(params: RenderArenaFrameParams) {
   const {
     ctx,
@@ -176,60 +223,25 @@ export function renderArenaFrame(params: RenderArenaFrameParams) {
     isTouchHUD,
   } = params;
 
+  const settings = useSettingsStore.getState();
+  const zoom = currentCamera.zoom > 0 ? currentCamera.zoom : 1;
+
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle = map.backgroundColor || '#060913';
-  ctx.fillRect(0, 0, viewW, viewH);
 
-  const parX = currentCamera.x * 0.14;
-  const parY = currentCamera.y * 0.14;
-  if (scratch.hazeWidth !== viewW || scratch.hazeHeight !== viewH || !scratch.hazeCanvas) {
-    scratch.hazeWidth = viewW;
-    scratch.hazeHeight = viewH;
-    scratch.hazeCanvas = document.createElement('canvas');
-    scratch.hazeCanvas.width = Math.max(1, viewW);
-    scratch.hazeCanvas.height = Math.max(1, viewH);
-    const hCtx = scratch.hazeCanvas.getContext('2d');
-    if (hCtx) {
-      const blueHaze = hCtx.createRadialGradient(
-        viewW * 0.25,
-        viewH * 0.35,
-        20,
-        viewW * 0.25,
-        viewH * 0.35,
-        Math.max(viewW, viewH) * 0.6,
-      );
-      blueHaze.addColorStop(0, 'rgba(0, 240, 255, 0.08)');
-      blueHaze.addColorStop(1, 'rgba(6, 9, 19, 0)');
-      hCtx.fillStyle = blueHaze;
-      hCtx.fillRect(0, 0, viewW, viewH);
-
-      const redHaze = hCtx.createRadialGradient(
-        viewW * 0.78,
-        viewH * 0.45,
-        20,
-        viewW * 0.78,
-        viewH * 0.45,
-        Math.max(viewW, viewH) * 0.55,
-      );
-      redHaze.addColorStop(0, 'rgba(255, 0, 85, 0.065)');
-      redHaze.addColorStop(1, 'rgba(6, 9, 19, 0)');
-      hCtx.fillStyle = redHaze;
-      hCtx.fillRect(0, 0, viewW, viewH);
-    }
+  const themeId = resolveMapTheme(map);
+  const backdropKey = `${map.id}:${themeId}:${viewW}x${viewH}`;
+  if (!scratch.backdropCache || scratch.backdropCache.key !== backdropKey) {
+    scratch.backdropCache = createBackdropCache(map, viewW, viewH);
   }
-  ctx.drawImage(scratch.hazeCanvas, 0, 0, viewW, viewH);
-
-  for (const star of scratch.stars) {
-    const sx = (((star.x * viewW - parX * 0.45) % viewW) + viewW) % viewW;
-    const sy =
-      (((star.y * viewH * 0.82 - parY * 0.35) % (viewH * 0.85)) + viewH * 0.85) %
-      (viewH * 0.85);
-    const tw = 0.65 + Math.sin(timeSec * 2.1 + star.twinkleOffset) * 0.35;
-    ctx.fillStyle = `rgba(186, 230, 253, ${star.alpha * tw})`;
-    ctx.beginPath();
-    ctx.arc(sx, sy, star.r, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  renderProceduralBackdrop(
+    ctx,
+    scratch.backdropCache,
+    map,
+    currentCamera,
+    viewW,
+    viewH,
+    timeSec,
+  );
 
   let shakeX = 0;
   let shakeY = 0;
@@ -238,9 +250,13 @@ export function renderArenaFrame(params: RenderArenaFrameParams) {
     shakeY = (Math.random() - 0.5) * screenShakeRef.current;
     screenShakeRef.current *= Math.pow(0.88, dt * 60);
   }
-  ctx.save();
-  ctx.translate(-currentCamera.x + shakeX, -currentCamera.y + shakeY);
 
+  ctx.save();
+  ctx.translate(shakeX, shakeY);
+  ctx.scale(zoom, zoom);
+  ctx.translate(-currentCamera.x, -currentCamera.y);
+
+  renderBackdropWorldProps(ctx, map, timeSec);
   renderMap(ctx, map, timeSec, true);
   renderRefillStations(ctx, engineWorld.stations, timeSec);
   renderWeaponPickups(ctx, engineWorld.pickups, timeSec);
@@ -252,6 +268,46 @@ export function renderArenaFrame(params: RenderArenaFrameParams) {
 
   renderBullets(ctx, engineWorld.bullets);
   renderParticles(ctx, engineWorld.particles);
+
+  // Subtle touch aim laser sightline clamped at walls/slopes/curves for mobile precision
+  if (isTouchHUD && settings.touchAimLine && !localPlayer.isDead) {
+    const originX = localPlayer.x;
+    const originY = localPlayer.y - 5;
+    const maxLen = 280;
+    const cosA = Math.cos(localPlayer.aimAngle);
+    const sinA = Math.sin(localPlayer.aimAngle);
+    const endX = originX + cosA * maxLen;
+    const endY = originY + sinA * maxLen;
+    const terrainHit = raycastMapTerrain(originX, originY, endX, endY, map);
+    const minT = terrainHit ? terrainHit.t : 1;
+    if (minT > 18 / maxLen) {
+      const startX = originX + cosA * 18;
+      const startY = originY + sinA * 18;
+      const hitX = originX + (endX - originX) * minT;
+      const hitY = originY + (endY - originY) * minT;
+      const teamRgb = localPlayer.team === 'blue' ? '56, 189, 248' : '251, 113, 133';
+      const laserGrad = ctx.createLinearGradient(startX, startY, hitX, hitY);
+      laserGrad.addColorStop(0, `rgba(${teamRgb}, 0.52)`);
+      laserGrad.addColorStop(1, `rgba(${teamRgb}, 0.06)`);
+
+      ctx.save();
+      ctx.strokeStyle = laserGrad;
+      ctx.lineWidth = Math.max(1.2, 1.6 / zoom);
+      ctx.setLineDash([6, 5]);
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(hitX, hitY);
+      ctx.stroke();
+
+      if (minT < 0.99) {
+        ctx.fillStyle = `rgba(${teamRgb}, 0.72)`;
+        ctx.beginPath();
+        ctx.arc(hitX, hitY, 2.4 / zoom, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
 
   const rScratch = scratch.remoteRenderScratch;
   for (const rp of engineWorld.remotePlayers.values()) {
@@ -269,13 +325,31 @@ export function renderArenaFrame(params: RenderArenaFrameParams) {
     rScratch.invulnerableTimer = rp.isInvulnerable ? 1 : 0;
     rScratch.carryingFlag = rp.carryingFlag;
     rScratch.isGrounded = rp.isGrounded;
-    renderPlayer(ctx, rScratch, timeSec, rp.isBoosting, rp.weaponType);
+    renderPlayer(
+      ctx,
+      rScratch,
+      timeSec,
+      rp.isBoosting,
+      rp.weaponType,
+      false,
+      zoom,
+      settings.highContrastTeamMarkers,
+    );
   }
 
   if (!isMultiplayer) {
     for (let i = 0; i < engineWorld.soloBots.length; i++) {
       const bot = engineWorld.soloBots[i];
-      renderPlayer(ctx, bot.player, timeSec, bot.isBoostingNow, bot.weaponType, false);
+      renderPlayer(
+        ctx,
+        bot.player,
+        timeSec,
+        bot.isBoostingNow,
+        bot.weaponType,
+        false,
+        zoom,
+        settings.highContrastTeamMarkers,
+      );
     }
   }
 
@@ -286,6 +360,8 @@ export function renderArenaFrame(params: RenderArenaFrameParams) {
     isBoostingNow,
     useCombatStore.getState().equippedWeapon,
     true,
+    zoom,
+    settings.highContrastTeamMarkers,
   );
 
   if (engineWorld.floatingTexts.length > 0) {
@@ -339,58 +415,73 @@ export function renderArenaFrame(params: RenderArenaFrameParams) {
   }
 
   const currentFlags = useCTFStore.getState().flags;
-  const enemyTeam = localPlayer.team === 'blue' ? 'red' : 'blue';
+  const friendlyTeam = localPlayer.team;
+  const enemyTeam = friendlyTeam === 'blue' ? 'red' : 'blue';
   const enemyFlag = currentFlags[enemyTeam];
-  let targetWorldX = enemyFlag.x;
-  let targetWorldY = enemyFlag.y;
-  if (enemyFlag.status === 'carried' && enemyFlag.carrierId) {
-    const carrierRemote = engineWorld.remotePlayers.get(enemyFlag.carrierId);
-    const carrierBot = !isMultiplayer ? engineWorld.getSoloBot(enemyFlag.carrierId) : undefined;
-    if (carrierRemote) {
-      targetWorldX = carrierRemote.renderX;
-      targetWorldY = carrierRemote.renderY;
-    } else if (carrierBot) {
-      targetWorldX = carrierBot.player.x;
-      targetWorldY = carrierBot.player.y;
-    } else if (
-      enemyFlag.carrierId === localPlayer.id ||
-      enemyFlag.carrierId === myPlayerId
-    ) {
-      targetWorldX = currentFlags[localPlayer.team].baseX;
-      targetWorldY = currentFlags[localPlayer.team].baseY;
+  const friendlyFlag = currentFlags[friendlyTeam];
+
+  const resolveFlagWorldPos = (flag: typeof enemyFlag) => {
+    let wx = flag.x;
+    let wy = flag.y;
+    if (flag.status === 'carried' && flag.carrierId) {
+      const carrierRemote = engineWorld.remotePlayers.get(flag.carrierId);
+      const carrierBot = !isMultiplayer ? engineWorld.getSoloBot(flag.carrierId) : undefined;
+      if (carrierRemote) {
+        wx = carrierRemote.renderX;
+        wy = carrierRemote.renderY;
+      } else if (carrierBot) {
+        wx = carrierBot.player.x;
+        wy = carrierBot.player.y;
+      } else if (flag.carrierId === localPlayer.id || flag.carrierId === myPlayerId) {
+        wx = friendlyFlag.baseX;
+        wy = friendlyFlag.baseY;
+      }
     }
-  }
+    return { wx, wy };
+  };
 
-  const scrX = targetWorldX - currentCamera.x;
-  const scrY = targetWorldY - currentCamera.y;
-  const marginX = 28;
-  const marginTop = 64;
-  const marginBot = 46;
-  if (scrX < 0 || scrX > viewW || scrY < 0 || scrY > viewH) {
-    const clampedX = Math.max(marginX, Math.min(viewW - marginX, scrX));
-    const clampedY = Math.max(marginTop, Math.min(viewH - marginBot, scrY));
-    const ang = Math.atan2(scrY - viewH / 2, scrX - viewW / 2);
-    const indicatorColor = localPlayer.carryingFlag
-      ? '#34d399'
-      : enemyTeam === 'red'
-        ? '#fb7185'
-        : '#38bdf8';
+  // Primary objective indicator (enemy flag, or home base when carrying)
+  const primaryPos = localPlayer.carryingFlag
+    ? { wx: friendlyFlag.baseX, wy: friendlyFlag.baseY }
+    : resolveFlagWorldPos(enemyFlag);
+  const primaryColor = localPlayer.carryingFlag
+    ? '#34d399'
+    : enemyTeam === 'red'
+      ? '#fb7185'
+      : '#38bdf8';
+  const primaryLabel = localPlayer.carryingFlag
+    ? 'HOME'
+    : enemyFlag.status === 'dropped'
+      ? `${Math.max(1, Math.ceil(enemyFlag.returnTimer))}s`
+      : 'FLAG';
+  drawOffscreenFlagIndicator(
+    ctx,
+    primaryPos.wx,
+    primaryPos.wy,
+    currentCamera,
+    viewW,
+    viewH,
+    primaryColor,
+    primaryLabel,
+  );
 
-    ctx.save();
-    ctx.translate(clampedX, clampedY);
-    ctx.rotate(ang);
-    ctx.fillStyle = indicatorColor;
-    ctx.strokeStyle = '#060913';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(9, 0);
-    ctx.lineTo(-5, -6);
-    ctx.lineTo(-2, 0);
-    ctx.lineTo(-5, 6);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
+  // Secondary alert indicator when our friendly flag is away from base
+  if (friendlyFlag.status !== 'at_base') {
+    const friendlyPos = resolveFlagWorldPos(friendlyFlag);
+    const secLabel =
+      friendlyFlag.status === 'dropped'
+        ? `RET ${Math.max(1, Math.ceil(friendlyFlag.returnTimer))}s`
+        : 'DEFEND';
+    drawOffscreenFlagIndicator(
+      ctx,
+      friendlyPos.wx,
+      friendlyPos.wy,
+      currentCamera,
+      viewW,
+      viewH,
+      '#fbbf24',
+      secLabel,
+    );
   }
 
   crosshairSpreadRef.current = Math.max(0, crosshairSpreadRef.current - dt * 36);
@@ -399,10 +490,38 @@ export function renderArenaFrame(params: RenderArenaFrameParams) {
     const my = pointerPosRef.current.y;
     const gap = 5 + crosshairSpreadRef.current;
     const tickLen = 6;
-    const accent = localPlayer.team === 'blue' ? '#38bdf8' : '#fb7185';
+    const combatState = useCombatStore.getState();
+    const activeCfg = WEAPONS[combatState.equippedWeapon];
+    const isLowAmmo =
+      activeCfg.maxAmmo !== Infinity &&
+      combatState.currentAmmo <= Math.max(1, Math.ceil(activeCfg.maxAmmo * 0.25));
+    const accent = isLowAmmo
+      ? '#fbbf24'
+      : localPlayer.team === 'blue'
+        ? '#38bdf8'
+        : '#fb7185';
+
+    const elapsedSinceShot = performance.now() - combatState.lastFiredAt;
+    const reloadProgress =
+      activeCfg.fireRateMs > 0 ? Math.min(1, elapsedSinceShot / activeCfg.fireRateMs) : 1;
 
     ctx.save();
     ctx.translate(mx, my);
+
+    if (reloadProgress < 1) {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(0, 0, gap + tickLen + 4, -Math.PI / 2, -Math.PI / 2 + reloadProgress * Math.PI * 2);
+      ctx.stroke();
+    } else if (isLowAmmo) {
+      ctx.strokeStyle = 'rgba(251, 191, 36, 0.5)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(0, 0, gap + tickLen + 3, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
     ctx.strokeStyle = 'rgba(6, 9, 19, 0.75)';
     ctx.lineWidth = 3.2;
     ctx.beginPath();

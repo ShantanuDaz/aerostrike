@@ -1,13 +1,17 @@
 import type { AvatarConfig } from '../avatar/types';
 import type { ActiveWeaponPickup, Bullet, WeaponType } from '../combat/types';
 import { WEAPONS } from '../combat/weaponsConfig';
-import { getSafeMuzzlePoint, segmentRectHitT } from '../combat/updateBullets';
+import { getSafeMuzzlePoint } from '../combat/updateBullets';
+import { hasSolidLineOfSight, isPointInSolidTerrain } from '../map/terrainGeometry';
 import type { Team, Flag, MatchStatus } from '../ctf/types';
 import type { ActiveRefillStation, GameMap } from '../map/types';
 import { pickTeamSpawn } from '../player/playerStore';
 import { updatePlayer } from '../player/updatePlayer';
 import type { InputState, Player } from '../player/types';
 import { sounds } from '../audio/soundEngine';
+
+export type SoloSquadSize = '1v1' | '2v2' | '3v3';
+export type BotDifficulty = 'cadet' | 'veteran' | 'ace';
 
 export interface SoloBot {
   id: string;
@@ -17,6 +21,7 @@ export interface SoloBot {
   ammo: number;
   lastFiredAtMs: number;
   aiRole: 'assault' | 'defender';
+  difficulty: BotDifficulty;
   strafeDir: number;
   nextStrafeSwitchMs: number;
   aimPhase: number;
@@ -77,6 +82,21 @@ const BOT_BLUE_PRESETS: {
       jetpackStyle: 'falcon_wings',
     },
   },
+  {
+    id: 'bot_blue_kestrel',
+    callsign: 'KESTREL-AI',
+    role: 'assault',
+    avatar: {
+      callsign: 'KESTREL-AI',
+      bodyColor: '#0ea5e9',
+      skinTone: '#fed7aa',
+      headgear: 'beret',
+      headgearColor: '#0f172a',
+      visorStyle: 'sunglasses',
+      visorColor: '#22d3ee',
+      jetpackStyle: 'dual_tank',
+    },
+  },
 ];
 
 const BOT_RED_PRESETS: {
@@ -115,6 +135,21 @@ const BOT_RED_PRESETS: {
       jetpackStyle: 'dual_tank',
     },
   },
+  {
+    id: 'bot_red_viper',
+    callsign: 'VIPER-AI',
+    role: 'assault',
+    avatar: {
+      callsign: 'VIPER-AI',
+      bodyColor: '#9f1239',
+      skinTone: '#fdba74',
+      headgear: 'robo_visor',
+      headgearColor: '#18181b',
+      visorStyle: 'neon',
+      visorColor: '#fbbf24',
+      jetpackStyle: 'single_heavy',
+    },
+  },
 ];
 
 let botBulletSeq = 0;
@@ -124,6 +159,7 @@ function createBotEntity(
   team: Team,
   map: GameMap,
   idx: number,
+  difficulty: BotDifficulty = 'veteran',
 ): SoloBot {
   const spawn = pickTeamSpawn(map, team, preset.id);
   const player: Player = {
@@ -163,6 +199,7 @@ function createBotEntity(
     ammo: WEAPONS.rifle.maxAmmo,
     lastFiredAtMs: 0,
     aiRole: preset.role,
+    difficulty,
     strafeDir: idx % 2 === 0 ? 1 : -1,
     nextStrafeSwitchMs: 1200 + idx * 400,
     aimPhase: idx * 1.7,
@@ -179,20 +216,37 @@ function createBotEntity(
   };
 }
 
+export interface CreateSoloBotSquadOptions {
+  squadSize?: SoloSquadSize;
+  difficulty?: BotDifficulty;
+}
+
 /**
- * Creates a balanced 2v2 Solo Skirmish squad (1 allied wingman + 2 opposing pilots).
+ * Creates a balanced Solo Skirmish squad (defaults to 2v2 / veteran).
  */
-export function createSoloBotSquad(map: GameMap, localTeam: Team): SoloBot[] {
+export function createSoloBotSquad(
+  map: GameMap,
+  localTeam: Team,
+  options?: CreateSoloBotSquadOptions,
+): SoloBot[] {
+  const squadSize = options?.squadSize ?? '2v2';
+  const difficulty = options?.difficulty ?? 'veteran';
   const bots: SoloBot[] = [];
   const enemyTeam: Team = localTeam === 'blue' ? 'red' : 'blue';
 
   const allyPresets = localTeam === 'blue' ? BOT_BLUE_PRESETS : BOT_RED_PRESETS;
   const enemyPresets = enemyTeam === 'blue' ? BOT_BLUE_PRESETS : BOT_RED_PRESETS;
 
-  // 1 allied wingman + 2 enemies -> balanced 2v2 with the local player
-  bots.push(createBotEntity(allyPresets[0], localTeam, map, 0));
-  bots.push(createBotEntity(enemyPresets[0], enemyTeam, map, 1));
-  bots.push(createBotEntity(enemyPresets[1], enemyTeam, map, 2));
+  const allyCount = squadSize === '1v1' ? 0 : squadSize === '3v3' ? 2 : 1;
+  const enemyCount = squadSize === '1v1' ? 1 : squadSize === '3v3' ? 3 : 2;
+
+  let slotIdx = 0;
+  for (let i = 0; i < allyCount && i < allyPresets.length; i++) {
+    bots.push(createBotEntity(allyPresets[i], localTeam, map, slotIdx++, difficulty));
+  }
+  for (let i = 0; i < enemyCount && i < enemyPresets.length; i++) {
+    bots.push(createBotEntity(enemyPresets[i], enemyTeam, map, slotIdx++, difficulty));
+  }
 
   return bots;
 }
@@ -204,30 +258,18 @@ function hasLineOfSight(
   x2: number,
   y2: number,
 ): boolean {
-  for (let i = 0; i < map.obstacles.length; i++) {
-    const obs = map.obstacles[i];
-    if (obs.type !== 'wall' && obs.type !== 'ground') continue;
-    if (segmentRectHitT(x1, y1, x2, y2, obs.x, obs.y, obs.width, obs.height) !== null) {
-      return false;
-    }
-  }
-  return true;
+  return hasSolidLineOfSight(map, x1, y1, x2, y2);
 }
 
 function hasWallAhead(map: GameMap, x: number, y: number, dirX: number): boolean {
   if (dirX === 0) return false;
   const probeX = x + dirX * 42;
-  for (let i = 0; i < map.obstacles.length; i++) {
-    const obs = map.obstacles[i];
-    if (obs.type !== 'wall' && obs.type !== 'ground') continue;
-    if (
-      probeX >= obs.x &&
-      probeX <= obs.x + obs.width &&
-      y + 18 > obs.y &&
-      y - 18 < obs.y + obs.height
-    ) {
-      return true;
-    }
+  // Walkable slopes rise gradually (free at head/upper-torso level), whereas real walls block torso/head
+  if (isPointInSolidTerrain(probeX, y - 16, map)) {
+    return true;
+  }
+  if (isPointInSolidTerrain(probeX, y + 6, map) && isPointInSolidTerrain(x + dirX * 22, y - 14, map)) {
+    return true;
   }
   return false;
 }
@@ -528,7 +570,10 @@ export function stepSoloBots(params: {
       ((bestHasLOS && bestTargetDist < 310 && Math.random() < 0.015) ||
         (p.carryingFlag && bestTargetDist < 360 && Math.random() < 0.02));
 
-    // Aim & combat evaluation
+    // Aim & combat evaluation scaled by difficulty
+    const diff = bot.difficulty ?? 'veteran';
+    const swayAmp = diff === 'cadet' ? 0.13 : diff === 'ace' ? 0.032 : 0.07;
+    const engageRange = diff === 'cadet' ? 490 : diff === 'ace' ? 680 : 600;
     let aimAngle = p.aimAngle;
     let shouldShoot = false;
     if (matchStatus === 'playing' && activeTarget) {
@@ -536,11 +581,11 @@ export function stepSoloBots(params: {
       const leadSec = Math.min(0.45, bestTargetDist / Math.max(1, cfg.speed * 60));
       const aimX = activeTarget.x + activeTarget.vx * leadSec * 36;
       const aimY = activeTarget.y - 6 + activeTarget.vy * leadSec * 20;
-      const sway = Math.sin(nowMs * 0.0045 + bot.aimPhase) * 0.07;
+      const sway = Math.sin(nowMs * 0.0045 + bot.aimPhase) * swayAmp;
       aimAngle = Math.atan2(aimY - (p.y - 5), aimX - p.x) + sway;
 
       const safeFromSelfBlast = !(bot.weaponType === 'rocket' && bestTargetDist < 135);
-      if (bestHasLOS && bestTargetDist < 600 && !activeTarget.isInvulnerable && safeFromSelfBlast) {
+      if (bestHasLOS && bestTargetDist < engageRange && !activeTarget.isInvulnerable && safeFromSelfBlast) {
         shouldShoot = true;
       }
     } else if (moveX !== 0) {
@@ -621,7 +666,9 @@ export function stepSoloBots(params: {
     // Fire Weapon
     if (shouldShoot && !nextPlayer.isDead && matchStatus === 'playing') {
       const activeConfig = WEAPONS[bot.weaponType];
-      const botFireCadenceMs = Math.max(activeConfig.fireRateMs, 175);
+      const cadenceMult = diff === 'cadet' ? 1.45 : diff === 'ace' ? 0.85 : 1.0;
+      const minFloor = diff === 'cadet' ? 300 : diff === 'ace' ? 135 : 175;
+      const botFireCadenceMs = Math.max(Math.round(activeConfig.fireRateMs * cadenceMult), minFloor);
       if (nowMs - bot.lastFiredAtMs >= botFireCadenceMs) {
         bot.lastFiredAtMs = nowMs;
 

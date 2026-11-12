@@ -249,6 +249,30 @@ describe('hostSecurity validation suite', () => {
     expect(onHost).toEqual({ callsign: 'RogueLeader', team: 'red', isReady: false });
     expect(onHost.isHost).toBeUndefined();
 
+    // Valid avatar updates are preserved while invalid/XSS colors are dropped
+    const withValidAvatar = sanitizeIncomingPeerMeta(
+      {
+        callsign: 'Apex',
+        avatar: BASE_AVATAR,
+        isHost: true,
+      },
+      true,
+    );
+    expect(withValidAvatar).toEqual({
+      callsign: 'Apex',
+      avatar: BASE_AVATAR,
+    });
+
+    const withInvalidAvatar = sanitizeIncomingPeerMeta(
+      {
+        callsign: 'Apex',
+        avatar: { ...BASE_AVATAR, bodyColor: 'javascript:alert(1)' },
+      },
+      true,
+    );
+    expect(withInvalidAvatar).toEqual({ callsign: 'Apex' });
+    expect(withInvalidAvatar.avatar).toBeUndefined();
+
     // Shoot rejects spoofed shooterId & invalid spreadOffsets
     expect(
       validateIncomingShoot(

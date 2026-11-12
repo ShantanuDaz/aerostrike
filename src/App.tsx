@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
 import { MainMenuScreen } from './features/screens/MainMenuScreen';
+import type { SoloLaunchConfig } from './features/screens/mainMenu/SoloSkirmishModal';
 import type { ScreenState } from './features/screens/types';
 import { useMapStore } from './features/map/mapStore';
 import { networkManager } from './features/network/peerRoom';
@@ -220,12 +221,34 @@ export const App = () => {
     setScreen('connecting');
   };
 
-  const handleStartSoloPractice = () => {
-    const currentMap = useMapStore.getState().selectedMap;
+  const handleStartSoloPractice = (config?: SoloLaunchConfig) => {
+    const mapStore = useMapStore.getState();
+    if (config?.mapId) {
+      mapStore.selectMap(config.mapId);
+    }
+    if (config) {
+      engineWorld.setSoloConfig({
+        squadSize: config.squadSize,
+        difficulty: config.difficulty,
+        playerTeam: config.playerTeam,
+      });
+      usePlayerStore.getState().setTeam(config.playerTeam);
+    }
+    const targetMap =
+      (config?.mapId && mapStore.availableMaps[config.mapId]) ||
+      useMapStore.getState().selectedMap;
     useMatchStatsStore.getState().resetStats();
     useCombatStore.getState().initLoadout(useSettingsStore.getState().defaultWeapon);
-    usePlayerStore.getState().spawnAtTeamBase(currentMap, useAvatarStore.getState().playerId);
-    initMatch(currentMap);
+    usePlayerStore.getState().spawnAtTeamBase(targetMap, useAvatarStore.getState().playerId);
+    initMatch(
+      targetMap,
+      config
+        ? {
+            targetCaptures: config.targetCaptures,
+            timeLimitSec: config.timeLimitSec,
+          }
+        : undefined,
+    );
     setScreen('in_game');
   };
 

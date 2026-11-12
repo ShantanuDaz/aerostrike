@@ -10,16 +10,23 @@ export function renderPlayer(
   isBoosting: boolean = false,
   weaponType: WeaponType = 'rifle',
   isLocal: boolean = false,
+  cameraZoom: number = 1,
+  highContrast: boolean = false,
 ): void {
   // If player is dead, ragdoll physics renders their body — draw subtle respawn tag for remote teammates/enemies
   if (player.isDead) {
     if (!isLocal && player.respawnTimer > 0) {
       ctx.save();
-      ctx.translate(player.x, player.y);
+      ctx.translate(player.x, player.y - 24);
+      const hudInvScale =
+        cameraZoom < 0.9 ? Math.min(1.42, 0.96 / Math.max(0.55, cameraZoom)) : 1;
+      if (hudInvScale !== 1) {
+        ctx.scale(hudInvScale, hudInvScale);
+      }
       ctx.font = 'bold 10px ui-monospace, SFMono-Regular, Menlo, monospace';
       ctx.fillStyle = 'rgba(226, 232, 240, 0.78)';
       ctx.textAlign = 'center';
-      ctx.fillText(`RESPAWN ${Math.ceil(player.respawnTimer)}s`, 0, -24);
+      ctx.fillText(`RESPAWN ${Math.ceil(player.respawnTimer)}s`, 0, 0);
       ctx.restore();
     }
     return;
@@ -74,6 +81,8 @@ export function renderPlayer(
     healthPercent: player.health / player.maxHealth,
     fuelPercent: player.boostFuel / player.maxFuel,
     showHUD: !isLocal,
+    cameraZoom,
+    highContrast,
     vx: player.vx,
     vy: player.vy,
     isGrounded: Boolean(player.isGrounded),

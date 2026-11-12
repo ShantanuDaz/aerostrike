@@ -72,14 +72,14 @@ export function RoomQRCodeModal({ isOpen, roomCode, onClose }: RoomQRCodeModalPr
   return (
     <div
       onClick={handleClose}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-3 sm:p-4 animate-in fade-in duration-150 select-none"
+      className="fixed inset-0 z-50 safe-insets flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-2.5 sm:p-4 animate-in fade-in duration-150 select-none"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="cyber-panel clip-chamfer-lg shadow-2xl w-full max-w-sm sm:max-w-lg max-h-[92dvh] overflow-hidden flex flex-col border border-cyan-500/50 glow-cyan animate-in zoom-in-95 duration-150"
+        className="cyber-panel clip-chamfer-lg shadow-2xl w-full max-w-sm short-wide:max-w-lg sm:max-w-lg max-h-[94dvh] overflow-hidden flex flex-col border border-cyan-500/50 glow-cyan animate-in zoom-in-95 duration-150"
       >
         {/* Pinned Header (Always visible on mobile portrait & landscape) */}
-        <div className="shrink-0 flex items-center justify-between px-4 sm:px-5 py-3 border-b border-cyan-500/20 bg-slate-950/90">
+        <div className="shrink-0 flex items-center justify-between px-4 sm:px-5 py-2.5 sm:tall:py-3 border-b border-cyan-500/20 bg-slate-950/90">
           <div className="flex items-center gap-2">
             <QrCode className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400" />
             <h3 className="text-xs sm:text-sm font-black text-white tracking-wider uppercase font-mono">
@@ -98,35 +98,35 @@ export function RoomQRCodeModal({ isOpen, roomCode, onClose }: RoomQRCodeModalPr
         </div>
 
         {/* Scrollable Body (Adapts side-by-side on mobile landscape / wide screens) */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 bg-slate-950/60">
-          <div className="min-h-full flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-5">
+        <div className="flex-1 min-h-0 overflow-y-auto cyber-scroll p-4 sm:tall:p-5 short:p-3 bg-slate-950/60">
+          <div className="min-h-full flex flex-col short-wide:flex-row sm:flex-row items-center justify-center gap-3.5 sm:gap-5">
             {/* QR Code Canvas in Frame */}
-            <div className="relative p-2.5 bg-white rounded-2xl shadow-2xl border-2 border-cyan-400/80 glow-cyan shrink-0">
+            <div className="relative p-2 sm:tall:p-2.5 bg-white rounded-2xl shadow-2xl border-2 border-cyan-400/80 glow-cyan shrink-0">
               <canvas
                 ref={canvasRef}
-                className="block rounded-lg w-40 h-40 sm:w-44 sm:h-44"
+                className="block rounded-lg w-36 h-36 short:w-32 short:h-32 sm:tall:w-44 sm:tall:h-44"
                 width={240}
                 height={240}
               />
             </div>
 
             {/* Room Info + Actions */}
-            <div className="flex-1 w-full flex flex-col items-center sm:items-start text-center sm:text-left gap-3 min-w-0">
+            <div className="flex-1 w-full flex flex-col items-center short-wide:items-start sm:items-start text-center short-wide:text-left sm:text-left gap-2.5 sm:tall:gap-3 min-w-0">
               <div>
                 <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-widest block">
                   Direct Staging Transmission
                 </span>
-                <div className="text-xl font-black text-white font-mono tracking-widest mt-0.5">
+                <div className="text-lg sm:tall:text-xl font-black text-white font-mono tracking-widest mt-0.5">
                   {roomCode}
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 text-xs font-mono text-slate-300">
+              <div className="flex items-center gap-2 text-[11px] sm:tall:text-xs font-mono text-slate-300">
                 <Smartphone className="w-4 h-4 text-cyan-400 shrink-0 hidden sm:block" />
                 <span>Scan with phone camera or in-game scanner to join room instantly.</span>
               </div>
 
-              <div className="w-full flex flex-col gap-2 pt-1">
+              <div className="w-full flex flex-col gap-2 pt-0.5">
                 <button
                   type="button"
                   onClick={handleCopy}
@@ -148,7 +148,7 @@ export function RoomQRCodeModal({ isOpen, roomCode, onClose }: RoomQRCodeModalPr
                 <button
                   type="button"
                   onClick={handleClose}
-                  className="w-full py-2 px-4 bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white font-mono font-bold text-xs uppercase tracking-wider clip-chamfer transition cursor-pointer sm:hidden"
+                  className="w-full py-2 px-4 bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white font-mono font-bold text-xs uppercase tracking-wider clip-chamfer transition cursor-pointer short-wide:hidden sm:hidden"
                 >
                   Done / Close
                 </button>
@@ -158,7 +158,7 @@ export function RoomQRCodeModal({ isOpen, roomCode, onClose }: RoomQRCodeModalPr
         </div>
 
         {/* Pinned Compact Footer */}
-        <div className="shrink-0 px-4 py-2 bg-slate-950/90 border-t border-cyan-500/20 text-center text-[9px] font-mono text-slate-500">
+        <div className="shrink-0 px-4 py-1.5 sm:tall:py-2 bg-slate-950/90 border-t border-cyan-500/20 text-center text-[9px] font-mono text-slate-500">
           <Sparkles className="w-2.5 h-2.5 inline mr-1 text-cyan-400" />
           PEERJS DIRECT WEBRTC P2P • TAP OUTSIDE OR CLOSE TO EXIT
         </div>

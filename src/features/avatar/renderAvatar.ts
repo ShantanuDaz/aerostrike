@@ -18,6 +18,8 @@ export interface RenderAvatarOptions {
   healthPercent?: number; // 0 to 1
   fuelPercent?: number;   // 0 to 1
   showHUD?: boolean;
+  cameraZoom?: number;
+  highContrast?: boolean;
   vx?: number;
   vy?: number;
   isGrounded?: boolean;
@@ -46,6 +48,8 @@ export function renderAvatar(
     team,
     healthPercent = 1,
     showHUD = true,
+    cameraZoom = 1,
+    highContrast = false,
     vx = 0,
     vy = 0,
     isGrounded = false,
@@ -365,18 +369,50 @@ export function renderAvatar(
     const barHeight = 3.5;
     const barX = -barWidth / 2;
     const barY = -32 * scale - 6;
+    const hudInvScale =
+      cameraZoom < 0.9 ? Math.min(1.42, 0.96 / Math.max(0.55, cameraZoom)) : 1;
 
     ctx.save();
+    ctx.translate(0, barY);
+    if (hudInvScale !== 1) {
+      ctx.scale(hudInvScale, hudInvScale);
+    }
+
+    const callsign = avatar.callsign || 'Pilot';
     ctx.font = 'bold 9.5px ui-monospace, SFMono-Regular, Menlo, monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = team === 'blue' ? '#bae6fd' : team === 'red' ? '#fecdd3' : '#f8fafc';
-    ctx.fillText(avatar.callsign || 'Pilot', 0, barY - 4);
+    ctx.fillText(callsign, highContrast && team ? 5 : 0, -4);
+
+    if (highContrast && team) {
+      const markerX = -Math.min(34, ctx.measureText(callsign).width * 0.5 + 8);
+      const markerY = -7.2;
+      ctx.fillStyle = team === 'blue' ? '#38bdf8' : '#fb7185';
+      ctx.strokeStyle = '#060913';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      if (team === 'blue') {
+        // Diamond badge for Blue squad
+        ctx.moveTo(markerX, markerY - 3.6);
+        ctx.lineTo(markerX + 3.6, markerY);
+        ctx.lineTo(markerX, markerY + 3.6);
+        ctx.lineTo(markerX - 3.6, markerY);
+      } else {
+        // Triangle badge for Red squad
+        ctx.moveTo(markerX, markerY - 3.8);
+        ctx.lineTo(markerX + 3.6, markerY + 3.2);
+        ctx.lineTo(markerX - 3.6, markerY + 3.2);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
 
     // Sleek framed health bar
     ctx.fillStyle = 'rgba(6, 9, 19, 0.85)';
-    ctx.fillRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
+    ctx.fillRect(barX - 1, -1, barWidth + 2, barHeight + 2);
     ctx.fillStyle = healthPercent > 0.35 ? (team === 'blue' ? '#38bdf8' : '#fb7185') : '#f43f5e';
-    ctx.fillRect(barX, barY, Math.max(0, healthPercent) * barWidth, barHeight);
+    ctx.fillRect(barX, 0, Math.max(0, healthPercent) * barWidth, barHeight);
 
     ctx.restore();
   }

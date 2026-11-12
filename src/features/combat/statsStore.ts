@@ -16,6 +16,13 @@ export interface KillFeedItem extends KillFeedEvent {
   createdAtMs: number;
 }
 
+export interface LocalDeathSummary {
+  killerCallsign: string;
+  killerTeam: Team;
+  weaponType: WeaponType | 'hazard' | 'self';
+  atMs: number;
+}
+
 const MAX_KILL_FEED = 4;
 const KILL_FEED_TTL_MS = 4800;
 
@@ -36,8 +43,12 @@ function schedulePrune(pruneFn: () => void) {
 interface MatchStatsStore {
   statsByPlayerId: Record<string, PlayerMatchStats>;
   killFeed: KillFeedItem[];
+  localDeathSummary: LocalDeathSummary | null;
+  tacticalMenuOpen: boolean;
 
   resetStats: () => void;
+  setLocalDeathSummary: (summary: LocalDeathSummary | null) => void;
+  setTacticalMenuOpen: (open: boolean) => void;
   registerParticipant: (playerId: string, callsign: string, team: Team) => void;
   recordKill: (evt: KillFeedEvent) => void;
   recordCapture: (playerId: string, callsign: string, team: Team, captureKey?: string) => void;
@@ -47,6 +58,8 @@ interface MatchStatsStore {
 export const useMatchStatsStore = create<MatchStatsStore>((set, get) => ({
   statsByPlayerId: {},
   killFeed: [],
+  localDeathSummary: null,
+  tacticalMenuOpen: false,
 
   resetStats: () => {
     seenKillIds.clear();
@@ -55,8 +68,17 @@ export const useMatchStatsStore = create<MatchStatsStore>((set, get) => ({
       clearTimeout(feedPruneTimer);
       feedPruneTimer = null;
     }
-    set({ statsByPlayerId: {}, killFeed: [] });
+    set({
+      statsByPlayerId: {},
+      killFeed: [],
+      localDeathSummary: null,
+      tacticalMenuOpen: false,
+    });
   },
+
+  setLocalDeathSummary: (localDeathSummary) => set({ localDeathSummary }),
+
+  setTacticalMenuOpen: (tacticalMenuOpen) => set({ tacticalMenuOpen }),
 
   registerParticipant: (playerId, callsign, team) =>
     set((state) => {

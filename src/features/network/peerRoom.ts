@@ -26,6 +26,7 @@ import {
 import { DamageRateTracker } from './hostSecurity';
 import { FastSyncController, type FastSyncTransportCallbacks } from './fastSyncController';
 import {
+  sendAvatarChangeBroadcast,
   sendDamageEvent,
   sendFlagSyncEvent,
   sendKillFeedEvent,
@@ -506,6 +507,10 @@ export class PeerNetworkManager {
       (msg, exclude) => this.sendToNetwork(msg, exclude),
       isReady,
     );
+  }
+
+  public broadcastAvatarChange() {
+    sendAvatarChangeBroadcast(this.session, (msg, exclude) => this.sendToNetwork(msg, exclude));
   }
 
   public broadcastMapChange(mapId: string) {

@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { GameMap } from '../../map/types';
+import { getCompiledTerrainShapes } from '../../map/terrainGeometry';
+import { getMapThemePalette } from '../../map/renderBackdrop';
 
 interface MapSchematicPreviewProps {
   map: GameMap;
@@ -24,7 +26,11 @@ export function MapSchematicPreview({
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
 
-    ctx.fillStyle = '#060b16';
+    const palette = getMapThemePalette(map);
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
+    bgGrad.addColorStop(0, palette.previewBgTop);
+    bgGrad.addColorStop(1, palette.previewBgBottom);
+    ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, w, h);
 
     ctx.strokeStyle = isSelected ? 'rgba(34, 211, 238, 0.1)' : 'rgba(148, 163, 184, 0.05)';
@@ -90,6 +96,34 @@ export function MapSchematicPreview({
       }
     }
 
+    // Slopes & curved hulls
+    const shapes = getCompiledTerrainShapes(map);
+    if (shapes.length > 0) {
+      for (const shape of shapes) {
+        const pts = shape.points;
+        if (pts.length < 3) continue;
+        ctx.fillStyle = shape.color ?? (isSelected ? '#475569' : '#334155');
+        ctx.beginPath();
+        ctx.moveTo(tx(pts[0].x), ty(pts[0].y));
+        for (let i = 1; i < pts.length; i++) {
+          ctx.lineTo(tx(pts[i].x), ty(pts[i].y));
+        }
+        ctx.closePath();
+        ctx.fill();
+
+        if (shape.topArc.length >= 2) {
+          ctx.strokeStyle = shape.trimColor ?? palette.terrainTrim;
+          ctx.lineWidth = isSelected ? 1.4 : 1.0;
+          ctx.beginPath();
+          ctx.moveTo(tx(shape.topArc[0].x), ty(shape.topArc[0].y));
+          for (let i = 1; i < shape.topArc.length; i++) {
+            ctx.lineTo(tx(shape.topArc[i].x), ty(shape.topArc[i].y));
+          }
+          ctx.stroke();
+        }
+      }
+    }
+
     for (const wp of map.weaponSpawns) {
       ctx.fillStyle = '#facc15';
       ctx.beginPath();
@@ -152,7 +186,7 @@ export function MapSchematicPreview({
       ref={canvasRef}
       width={220}
       height={100}
-      className="w-24 h-12 shrink-0 sm:w-full sm:h-20 lg:h-24 rounded-lg border border-slate-800/90 bg-[#060b16] block"
+      className="w-24 h-12 shrink-0 short-wide:w-full short-wide:h-16 sm:w-full sm:tall:h-20 short:h-16 lg:tall:h-24 rounded-lg border border-slate-800/90 bg-[#060b16] block"
     />
   );
 }

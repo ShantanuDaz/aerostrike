@@ -31,11 +31,17 @@ interface FireWeaponParams {
   map?: GameMap | null;
 }
 
+export interface AmmoNotice {
+  text: string;
+  atMs: number;
+}
+
 interface CombatStore {
   equippedWeapon: WeaponType;
   currentAmmo: number;
   ammoByWeapon: Record<WeaponType, number>;
   lastFiredAt: number;
+  ammoNotice: AmmoNotice | null;
 
   setBullets: (bullets: Bullet[]) => void;
   setParticles: (particles: Particle[]) => void;
@@ -44,6 +50,7 @@ interface CombatStore {
   grantWeaponPickup: (weapon: WeaponType) => void;
   cycleWeapon: () => void;
   setPickups: (pickups: ActiveWeaponPickup[]) => void;
+  clearAmmoNotice: () => void;
   fireWeapon: (params: FireWeaponParams) => {
     recoil: number;
     bulletsSpawned: Bullet[];
@@ -60,6 +67,7 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
   currentAmmo: WEAPONS.rifle.maxAmmo,
   ammoByWeapon: createInitialAmmoMap('rifle'),
   lastFiredAt: 0,
+  ammoNotice: null,
 
   setBullets: (bullets) => {
     engineWorld.bullets = bullets;
@@ -69,6 +77,8 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
     engineWorld.particles = particles;
   },
 
+  clearAmmoNotice: () => set({ ammoNotice: null }),
+
   initLoadout: (startingWeapon = 'rifle') => {
     const ammoByWeapon = createInitialAmmoMap(startingWeapon);
     set({
@@ -76,6 +86,7 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
       ammoByWeapon,
       currentAmmo: ammoByWeapon[startingWeapon],
       lastFiredAt: 0,
+      ammoNotice: null,
     });
     engineWorld.notifyUrgentLocalStateChange();
   },
@@ -107,6 +118,7 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
       equippedWeapon: weapon,
       ammoByWeapon: nextAmmoByWeapon,
       currentAmmo: grantedAmmo,
+      ammoNotice: null,
     });
     engineWorld.notifyUrgentLocalStateChange();
   },
@@ -165,6 +177,10 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
           ammoByWeapon: nextAmmoByWeapon,
           currentAmmo: nextAmmoByWeapon[fallback],
           lastFiredAt: now,
+          ammoNotice: {
+            text: `${WEAPONS[firedWeapon].name.toUpperCase()} EMPTY • ${WEAPONS[fallback].name.toUpperCase()}`,
+            atMs: Date.now(),
+          },
         });
         engineWorld.notifyUrgentLocalStateChange();
       } else {

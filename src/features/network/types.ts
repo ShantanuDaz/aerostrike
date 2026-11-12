@@ -105,6 +105,7 @@ export interface PeerInfo {
   peerId: string;
   callsign: string;
   team: Team;
+  avatar?: AvatarConfig;
   isReady: boolean;
   isHost?: boolean;
   lastSeen: number;

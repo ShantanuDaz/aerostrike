@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { usePlayerStore } from '../player/playerStore';
 import { useCombatStore } from '../combat/combatStore';
+import type { WeaponType } from '../combat/types';
 import { WEAPONS } from '../combat/weaponsConfig';
 import { useSettingsStore } from '../settings/settingsStore';
+import { useCTFStore } from '../ctf/ctfStore';
+import { useMatchStatsStore } from '../combat/statsStore';
+import { useNetworkStore } from '../network/networkStore';
+import { sounds } from '../audio/soundEngine';
 import { useIsTouchHUD } from './useIsTouchHUD';
 import { engineWorld } from '../game/engineWorld';
 import { isPointInRadarExclusion, shouldIgnoreSyntheticMouse } from './touchExclusion';
-import { Flame, RefreshCw, Wind } from 'lucide-react';
+import { ChevronUp, Crosshair, Flame, RefreshCw, Wind } from 'lucide-react';
 
 interface VirtualControlsProps {
   onFire: () => void;
@@ -23,7 +28,19 @@ interface ActiveStick extends StickOrigin {
   currentX: number;
   currentY: number;
   dragged: boolean;
+  dist: number;
 }
+
+const WEAPON_BADGES: Record<WeaponType, { tag: string; label: string }> = {
+  rifle: { tag: 'RFL', label: 'Rifle' },
+  shotgun: { tag: 'SHG', label: 'Shotgun' },
+  sniper: { tag: 'SNP', label: 'Sniper' },
+  rocket: { tag: 'RPG', label: 'RPG' },
+  pistol: { tag: 'PST', label: 'Pistol' },
+};
+
+const WEAPON_LIST: WeaponType[] = ['rifle', 'shotgun', 'sniper', 'rocket', 'pistol'];
+const PRECISION_AUTO_FIRE_DIST = 46;
 
 export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps) {
   const isTouchHUD = useIsTouchHUD();
@@ -33,27 +50,81 @@ export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps
   const fuelOverheated = usePlayerStore((s) => Boolean(s.player.fuelOverheated));
   const equippedWeapon = useCombatStore((s) => s.equippedWeapon);
   const currentAmmo = useCombatStore((s) => s.currentAmmo);
+  const ammoByWeapon = useCombatStore((s) => s.ammoByWeapon);
+  const setEquippedWeapon = useCombatStore((s) => s.setEquippedWeapon);
+  const lastFiredAt = useCombatStore((s) => s.lastFiredAt);
   const showTouchHints = useSettingsStore((s) => s.showTouchHints);
+  const touchAimMode = useSettingsStore((s) => s.touchAimMode);
+  const touchLayout = useSettingsStore((s) => s.touchLayout);
+  const showTouchBoostButton = useSettingsStore((s) => s.showTouchBoostButton);
+
+  const isLeftHanded = touchLayout === 'left_handed';
 
   // Origin coordinates only update on touchstart/touchend (zero touchmove React re-renders)
-  const [leftOrigin, setLeftOrigin] = useState<StickOrigin | null>(null);
-  const [rightOrigin, setRightOrigin] = useState<StickOrigin | null>(null);
+  const [moveOrigin, setMoveOrigin] = useState<StickOrigin | null>(null);
+  const [aimOrigin, setAimOrigin] = useState<StickOrigin | null>(null);
+  const [precisionAutoFiring, setPrecisionAutoFiring] = useState(false);
+  const [arsenalOpen, setArsenalOpen] = useState(false);
 
-  const leftTouchRef = useRef<ActiveStick | null>(null);
-  const rightTouchRef = useRef<ActiveStick | null>(null);
-  const leftKnobRef = useRef<HTMLDivElement | null>(null);
-  const rightKnobRef = useRef<HTMLDivElement | null>(null);
+  const moveTouchRef = useRef<ActiveStick | null>(null);
+  const aimTouchRef = useRef<ActiveStick | null>(null);
+  const moveKnobRef = useRef<HTMLDivElement | null>(null);
+  const aimKnobRef = useRef<HTMLDivElement | null>(null);
+  const cooldownBarRef = useRef<HTMLDivElement | null>(null);
   const aimGraceTimerRef = useRef<number | null>(null);
+
+  const touchAimModeRef = useRef(touchAimMode);
+  const isLeftHandedRef = useRef(isLeftHanded);
+  useEffect(() => {
+    touchAimModeRef.current = touchAimMode;
+  }, [touchAimMode]);
+  useEffect(() => {
+    isLeftHandedRef.current = isLeftHanded;
+  }, [isLeftHanded]);
 
   const [isBoostingDirect, setIsBoostingDirect] = useState(false);
   const [isDashingDirect, setIsDashingDirect] = useState(false);
   const isBoostingDirectRef = useRef(false);
   const isDashingDirectRef = useRef(false);
-  const lastButtonTouchMsRef = useRef<{ weapon: number; dash: number; boost: number }>({
+  const lastButtonTouchMsRef = useRef<{
+    weapon: number;
+    drawer: number;
+    dash: number;
+    boost: number;
+  }>({
     weapon: 0,
+    drawer: 0,
     dash: 0,
     boost: 0,
   });
+
+  // Animate fire-rate recharge bar on the touch weapon badge without 60 FPS React state
+  useEffect(() => {
+    if (!isTouchHUD) return;
+    const fireRateMs = WEAPONS[equippedWeapon].fireRateMs;
+    if (fireRateMs <= 0 || !lastFiredAt) {
+      if (cooldownBarRef.current) {
+        cooldownBarRef.current.style.transform = 'scaleX(0)';
+      }
+      return;
+    }
+
+    let rafId = 0;
+    const tickCooldown = () => {
+      const elapsed = performance.now() - lastFiredAt;
+      const remainingPct = Math.max(0, 1 - elapsed / fireRateMs);
+      if (cooldownBarRef.current) {
+        cooldownBarRef.current.style.transform = `scaleX(${remainingPct})`;
+      }
+      if (remainingPct > 0.01) {
+        rafId = requestAnimationFrame(tickCooldown);
+      } else if (cooldownBarRef.current) {
+        cooldownBarRef.current.style.transform = 'scaleX(0)';
+      }
+    };
+    rafId = requestAnimationFrame(tickCooldown);
+    return () => cancelAnimationFrame(rafId);
+  }, [isTouchHUD, equippedWeapon, lastFiredAt]);
 
   const clearAimGraceTimer = useCallback(() => {
     if (aimGraceTimerRef.current !== null) {
@@ -64,12 +135,14 @@ export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps
 
   const resetAllTouchControls = useCallback(() => {
     clearAimGraceTimer();
-    leftTouchRef.current = null;
-    rightTouchRef.current = null;
+    moveTouchRef.current = null;
+    aimTouchRef.current = null;
     isBoostingDirectRef.current = false;
     isDashingDirectRef.current = false;
-    setLeftOrigin(null);
-    setRightOrigin(null);
+    setMoveOrigin(null);
+    setAimOrigin(null);
+    setPrecisionAutoFiring(false);
+    setArsenalOpen(false);
     setIsBoostingDirect(false);
     setIsDashingDirect(false);
     setInput({ moveX: 0, moveY: 0, boosting: false, shooting: false, dash: false });
@@ -84,9 +157,9 @@ export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps
   const handleBoostEnd = () => {
     isBoostingDirectRef.current = false;
     setIsBoostingDirect(false);
-    const lt = leftTouchRef.current;
-    const isLeftBoosting = lt ? lt.currentY - lt.startY < -22 : false;
-    setInput({ boosting: isLeftBoosting });
+    const mt = moveTouchRef.current;
+    const isStickBoosting = mt ? mt.currentY - mt.startY < -22 : false;
+    setInput({ boosting: isStickBoosting });
   };
 
   const handleDashStart = () => {
@@ -105,6 +178,10 @@ export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps
   const handleTouchStart = useCallback(
     (e: TouchEvent) => {
       if (!isTouchHUD) return;
+      if (useCTFStore.getState().matchStatus !== 'playing') return;
+      const isMultiplayer = Boolean(useNetworkStore.getState().roomCode);
+      if (!isMultiplayer && useMatchStatsStore.getState().tacticalMenuOpen) return;
+
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -113,7 +190,12 @@ export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps
         return;
       }
 
+      if (arsenalOpen) {
+        setArsenalOpen(false);
+      }
+
       const halfWidth = window.innerWidth / 2;
+      const leftHanded = isLeftHandedRef.current;
 
       for (let i = 0; i < e.changedTouches.length; i++) {
         const touch = e.changedTouches[i];
@@ -124,21 +206,8 @@ export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps
           continue;
         }
 
-        // Left 50%: Movement & Jetpack Stick
-        if (clientX < halfWidth && !leftTouchRef.current) {
-          e.preventDefault();
-          leftTouchRef.current = {
-            id: identifier,
-            startX: clientX,
-            startY: clientY,
-            currentX: clientX,
-            currentY: clientY,
-            dragged: false,
-          };
-          setLeftOrigin({ startX: clientX, startY: clientY });
-        }
-        // Right 50%: Aim & Fire Stick (excluding live Minimap Radar widget zone)
-        else if (clientX >= halfWidth && !rightTouchRef.current) {
+        // Exclude live Minimap Radar + Zoom strip on top-right
+        if (clientX >= halfWidth) {
           const mm = engineWorld.minimapTarget;
           const mmRect =
             mm.canvas && typeof mm.canvas.getBoundingClientRect === 'function'
@@ -147,30 +216,50 @@ export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps
           if (isPointInRadarExclusion(clientX, clientY, window.innerWidth, mm, mmRect)) {
             continue;
           }
+        }
 
+        const isMoveZone = leftHanded ? clientX >= halfWidth : clientX < halfWidth;
+
+        if (isMoveZone && !moveTouchRef.current) {
           e.preventDefault();
-          rightTouchRef.current = {
+          moveTouchRef.current = {
             id: identifier,
             startX: clientX,
             startY: clientY,
             currentX: clientX,
             currentY: clientY,
             dragged: false,
+            dist: 0,
           };
-          setRightOrigin({ startX: clientX, startY: clientY });
+          setMoveOrigin({ startX: clientX, startY: clientY });
+        } else if (!isMoveZone && !aimTouchRef.current) {
+          e.preventDefault();
+          aimTouchRef.current = {
+            id: identifier,
+            startX: clientX,
+            startY: clientY,
+            currentX: clientX,
+            currentY: clientY,
+            dragged: false,
+            dist: 0,
+          };
+          setAimOrigin({ startX: clientX, startY: clientY });
+          setPrecisionAutoFiring(false);
 
-          // Brief aim-grace window avoids firing frame-0 shot along stale aimAngle when dragging
-          clearAimGraceTimer();
-          aimGraceTimerRef.current = window.setTimeout(() => {
-            aimGraceTimerRef.current = null;
-            if (rightTouchRef.current) {
-              setInput({ shooting: true });
-            }
-          }, 80);
+          if (touchAimModeRef.current === 'instant') {
+            // Brief aim-grace window avoids firing frame-0 shot along stale aimAngle when dragging
+            clearAimGraceTimer();
+            aimGraceTimerRef.current = window.setTimeout(() => {
+              aimGraceTimerRef.current = null;
+              if (aimTouchRef.current && touchAimModeRef.current === 'instant') {
+                setInput({ shooting: true });
+              }
+            }, 80);
+          }
         }
       }
     },
-    [isTouchHUD, clearAimGraceTimer, setInput],
+    [isTouchHUD, arsenalOpen, clearAimGraceTimer, setInput],
   );
 
   const handleTouchMove = useCallback(
@@ -180,10 +269,10 @@ export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps
         const touch = e.changedTouches[i];
         const { clientX, clientY, identifier } = touch;
 
-        if (leftTouchRef.current && leftTouchRef.current.id === identifier) {
+        if (moveTouchRef.current && moveTouchRef.current.id === identifier) {
           e.preventDefault();
-          const startX = leftTouchRef.current.startX;
-          const startY = leftTouchRef.current.startY;
+          const startX = moveTouchRef.current.startX;
+          const startY = moveTouchRef.current.startY;
           const maxDist = 52;
 
           const dx = clientX - startX;
@@ -197,10 +286,11 @@ export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps
           const currentX = startX + offsetX;
           const currentY = startY + offsetY;
 
-          leftTouchRef.current.currentX = currentX;
-          leftTouchRef.current.currentY = currentY;
-          if (leftKnobRef.current) {
-            leftKnobRef.current.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0)`;
+          moveTouchRef.current.currentX = currentX;
+          moveTouchRef.current.currentY = currentY;
+          moveTouchRef.current.dist = dist;
+          if (moveKnobRef.current) {
+            moveKnobRef.current.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0)`;
           }
 
           const rawNormX = Math.max(-1, Math.min(1, offsetX / 46));
@@ -214,10 +304,10 @@ export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps
           setInput({ moveX: curvedX, moveY, boosting });
         }
 
-        if (rightTouchRef.current && rightTouchRef.current.id === identifier) {
+        if (aimTouchRef.current && aimTouchRef.current.id === identifier) {
           e.preventDefault();
-          const startX = rightTouchRef.current.startX;
-          const startY = rightTouchRef.current.startY;
+          const startX = aimTouchRef.current.startX;
+          const startY = aimTouchRef.current.startY;
           const maxDist = 60;
 
           const dx = clientX - startX;
@@ -228,16 +318,23 @@ export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps
 
           const offsetX = Math.cos(angle) * clampedDist;
           const offsetY = Math.sin(angle) * clampedDist;
-          rightTouchRef.current.currentX = startX + offsetX;
-          rightTouchRef.current.currentY = startY + offsetY;
-          if (rightKnobRef.current) {
-            rightKnobRef.current.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0)`;
+          aimTouchRef.current.currentX = startX + offsetX;
+          aimTouchRef.current.currentY = startY + offsetY;
+          aimTouchRef.current.dist = dist;
+          if (aimKnobRef.current) {
+            aimKnobRef.current.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0)`;
           }
 
           if (dist > 8) {
-            rightTouchRef.current.dragged = true;
+            aimTouchRef.current.dragged = true;
             clearAimGraceTimer();
-            setInput({ aimAngle: angle, shooting: true });
+            if (touchAimModeRef.current === 'precision') {
+              const outerRimAutoFire = dist >= PRECISION_AUTO_FIRE_DIST;
+              setPrecisionAutoFiring(outerRimAutoFire);
+              setInput({ aimAngle: angle, shooting: outerRimAutoFire });
+            } else {
+              setInput({ aimAngle: angle, shooting: true });
+            }
           }
         }
       }
@@ -252,22 +349,30 @@ export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps
         const touch = e.changedTouches[i];
         const { identifier } = touch;
 
-        if (leftTouchRef.current && leftTouchRef.current.id === identifier) {
+        if (moveTouchRef.current && moveTouchRef.current.id === identifier) {
           e.preventDefault();
-          leftTouchRef.current = null;
-          setLeftOrigin(null);
+          moveTouchRef.current = null;
+          setMoveOrigin(null);
           setInput({ moveX: 0, moveY: 0, boosting: isBoostingDirectRef.current });
         }
 
-        if (rightTouchRef.current && rightTouchRef.current.id === identifier) {
+        if (aimTouchRef.current && aimTouchRef.current.id === identifier) {
           e.preventDefault();
-          const wasQuickStationaryTap =
-            aimGraceTimerRef.current !== null && !rightTouchRef.current.dragged;
+          const stick = aimTouchRef.current;
+          const wasInstantTap =
+            touchAimModeRef.current === 'instant' &&
+            aimGraceTimerRef.current !== null &&
+            !stick.dragged;
+          const wasPrecisionReleaseShot =
+            touchAimModeRef.current === 'precision' && stick.dist < PRECISION_AUTO_FIRE_DIST;
+
           clearAimGraceTimer();
-          rightTouchRef.current = null;
-          setRightOrigin(null);
+          aimTouchRef.current = null;
+          setAimOrigin(null);
+          setPrecisionAutoFiring(false);
           setInput({ shooting: false });
-          if (wasQuickStationaryTap) {
+
+          if (wasInstantTap || wasPrecisionReleaseShot) {
             onFire();
           }
         }
@@ -312,28 +417,32 @@ export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps
     setInput,
   ]);
 
-  // Do NOT render distracting mobile thumb controls on Desktop mouse/keyboard setups!
+  // Do NOT render mobile thumb controls on Desktop mouse/keyboard setups!
   if (!isTouchHUD) return null;
 
   const weaponCfg = WEAPONS[equippedWeapon];
+  const weaponMeta = WEAPON_BADGES[equippedWeapon];
   const ammoLabel = weaponCfg.maxAmmo === Infinity ? '∞' : `${currentAmmo}`;
+  const isLowAmmo =
+    weaponCfg.maxAmmo !== Infinity &&
+    currentAmmo <= Math.max(1, Math.ceil(weaponCfg.maxAmmo * 0.25));
   const dashReady = dashCooldown <= 0.05 && !fuelOverheated && boostFuel >= 18;
 
   return (
     <div className="fixed inset-0 pointer-events-none z-30 select-none overflow-hidden touch-none">
-      {/* 1. DYNAMIC LEFT MOVE STICK */}
-      {leftOrigin && (
+      {/* 1. DYNAMIC MOVEMENT & JETPACK STICK */}
+      {moveOrigin && (
         <div
           style={{
-            left: leftOrigin.startX - 52,
-            top: leftOrigin.startY - 52,
+            left: moveOrigin.startX - 52,
+            top: moveOrigin.startY - 52,
           }}
           className="absolute w-[104px] h-[104px] rounded-full bg-slate-950/60 backdrop-blur-md border border-cyan-400/60 flex items-center justify-center glow-cyan pointer-events-none"
         >
           <div className="absolute w-full h-px bg-cyan-400/20" />
           <div className="absolute h-full w-px bg-cyan-400/20" />
           <div
-            ref={leftKnobRef}
+            ref={moveKnobRef}
             style={{ transform: 'translate3d(0px, 0px, 0)' }}
             className="w-11 h-11 rounded-full bg-gradient-to-br from-cyan-400 to-blue-600 shadow-lg border border-white/80 flex items-center justify-center pointer-events-none will-change-transform"
           >
@@ -342,52 +451,191 @@ export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps
         </div>
       )}
 
-      {/* 2. DYNAMIC RIGHT AIM & FIRE STICK */}
-      {rightOrigin && (
+      {/* 2. DYNAMIC AIM & FIRE STICK */}
+      {aimOrigin && (
         <div
           style={{
-            left: rightOrigin.startX - 60,
-            top: rightOrigin.startY - 60,
+            left: aimOrigin.startX - 60,
+            top: aimOrigin.startY - 60,
           }}
-          className="absolute w-[120px] h-[120px] rounded-full bg-slate-950/60 backdrop-blur-md border border-rose-500/60 flex items-center justify-center glow-red pointer-events-none"
+          className={`absolute w-[120px] h-[120px] rounded-full bg-slate-950/60 backdrop-blur-md flex items-center justify-center pointer-events-none border ${
+            touchAimMode === 'precision' && !precisionAutoFiring
+              ? 'border-amber-400/65'
+              : 'border-rose-500/65 glow-red'
+          }`}
         >
-          <div className="w-14 h-14 rounded-full border border-dashed border-rose-400/45 absolute" />
           <div
-            ref={rightKnobRef}
+            className={`w-[92px] h-[92px] rounded-full border border-dashed absolute ${
+              touchAimMode === 'precision'
+                ? precisionAutoFiring
+                  ? 'border-rose-400/80'
+                  : 'border-amber-300/45'
+                : 'border-rose-400/45 w-14 h-14'
+            }`}
+          />
+          <div
+            ref={aimKnobRef}
             style={{ transform: 'translate3d(0px, 0px, 0)' }}
-            className="w-12 h-12 rounded-full bg-gradient-to-br from-rose-500 to-red-600 border border-white/90 shadow-lg flex items-center justify-center pointer-events-none will-change-transform"
+            className={`w-12 h-12 rounded-full border border-white/90 shadow-lg flex items-center justify-center pointer-events-none will-change-transform ${
+              touchAimMode === 'precision' && !precisionAutoFiring
+                ? 'bg-gradient-to-br from-amber-400 to-orange-500'
+                : 'bg-gradient-to-br from-rose-500 to-red-600'
+            }`}
           >
-            <div className="w-3 h-3 rounded-full bg-white" />
+            {touchAimMode === 'precision' && !precisionAutoFiring ? (
+              <Crosshair className="w-4 h-4 text-slate-950" />
+            ) : (
+              <div className="w-3 h-3 rounded-full bg-white" />
+            )}
           </div>
         </div>
       )}
 
-      {/* 3. SLEEK CHAMFERED BOTTOM-RIGHT THUMB CONTROLS (Weapon + Dash + Boost) */}
-      <div className="absolute right-3 bottom-4 sm:right-4 sm:bottom-5 flex items-end gap-2 pointer-events-auto">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (shouldIgnoreSyntheticMouse(lastButtonTouchMsRef.current.weapon)) return;
-            onSwitchWeapon();
-          }}
-          onTouchStart={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            lastButtonTouchMsRef.current.weapon = performance.now();
-            onSwitchWeapon();
-          }}
-          className="w-14 h-12 sm:w-16 sm:h-14 bg-slate-950/75 hover:bg-slate-900 border border-cyan-500/50 backdrop-blur-md flex flex-col items-center justify-center text-cyan-200 clip-chamfer shadow-xl cursor-pointer active:scale-95 transition"
-          title="Switch Weapon"
-        >
-          <div className="flex items-center gap-1 text-[9px] font-mono font-black uppercase text-white">
-            <RefreshCw className="w-3 h-3 text-cyan-400" />
-            <span>{equippedWeapon.slice(0, 3)}</span>
-          </div>
-          <span className="text-[10px] font-mono font-bold text-cyan-300 mt-0.5">
-            {ammoLabel}
-          </span>
-        </button>
+      {/* 3. SLEEK CHAMFERED THUMB CONTROLS (Quick Arsenal + Dash + Optional Boost) */}
+      <div
+        data-no-joystick="true"
+        style={
+          isLeftHanded
+            ? {
+                marginLeft: 'env(safe-area-inset-left, 0px)',
+                marginBottom: 'env(safe-area-inset-bottom, 0px)',
+              }
+            : {
+                marginRight: 'env(safe-area-inset-right, 0px)',
+                marginBottom: 'env(safe-area-inset-bottom, 0px)',
+              }
+        }
+        className={`absolute bottom-3 short:bottom-2.5 sm:tall:bottom-5 flex items-end gap-2 pointer-events-auto ${
+          isLeftHanded ? 'left-3 sm:left-4 flex-row-reverse' : 'right-3 sm:right-4'
+        }`}
+      >
+        {/* Weapon Cycle + Quick Arsenal Drawer */}
+        <div className="relative flex flex-col items-center gap-1">
+          {arsenalOpen && (
+            <div
+              data-no-joystick="true"
+              className={`absolute bottom-full mb-2 ${
+                isLeftHanded ? 'left-0' : 'right-0'
+              } cyber-panel clip-chamfer p-1.5 border border-cyan-500/50 bg-slate-950/95 backdrop-blur-md shadow-2xl flex flex-col gap-1 min-w-[138px] animate-in fade-in slide-in-from-bottom-2 duration-100`}
+            >
+              {WEAPON_LIST.map((wId) => {
+                const cfg = WEAPONS[wId];
+                const meta = WEAPON_BADGES[wId];
+                const ammo = ammoByWeapon[wId] ?? 0;
+                const available = cfg.maxAmmo === Infinity || ammo > 0;
+                const active = wId === equippedWeapon;
+                return (
+                  <button
+                    key={wId}
+                    type="button"
+                    disabled={!available}
+                    onTouchStart={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (!available) return;
+                      sounds.playUiClick();
+                      setEquippedWeapon(wId);
+                      setArsenalOpen(false);
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!available) return;
+                      sounds.playUiClick();
+                      setEquippedWeapon(wId);
+                      setArsenalOpen(false);
+                    }}
+                    className={`flex items-center justify-between gap-2 px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider clip-chamfer border transition cursor-pointer ${
+                      active
+                        ? 'bg-cyan-500/20 border-cyan-400 text-white font-black'
+                        : available
+                          ? 'bg-slate-900/80 border-slate-800 hover:border-cyan-500/40 text-slate-200 font-bold'
+                          : 'bg-slate-950/50 border-transparent text-slate-600 opacity-45 cursor-not-allowed'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: cfg.color }}
+                      />
+                      <span>{meta.label}</span>
+                    </span>
+                    <span className={active ? 'text-cyan-300' : 'text-slate-400'}>
+                      {cfg.maxAmmo === Infinity ? '∞' : ammo}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (shouldIgnoreSyntheticMouse(lastButtonTouchMsRef.current.drawer)) return;
+              sounds.playUiClick();
+              setArsenalOpen((v) => !v);
+            }}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              lastButtonTouchMsRef.current.drawer = performance.now();
+              sounds.playUiClick();
+              setArsenalOpen((v) => !v);
+            }}
+            className={`px-2 py-0.5 text-[8px] font-mono font-bold uppercase tracking-widest border clip-chamfer flex items-center gap-1 transition cursor-pointer ${
+              arsenalOpen
+                ? 'bg-cyan-500/25 border-cyan-400 text-cyan-200'
+                : 'bg-slate-950/80 border-slate-700/80 text-slate-300 hover:text-white'
+            }`}
+            title="Open Weapon Rack"
+          >
+            <ChevronUp
+              className={`w-2.5 h-2.5 transition-transform ${arsenalOpen ? 'rotate-180' : ''}`}
+            />
+            <span>Rack</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (shouldIgnoreSyntheticMouse(lastButtonTouchMsRef.current.weapon)) return;
+              onSwitchWeapon();
+            }}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              lastButtonTouchMsRef.current.weapon = performance.now();
+              onSwitchWeapon();
+            }}
+            className={`relative overflow-hidden w-14 h-12 sm:w-16 sm:h-14 bg-slate-950/75 hover:bg-slate-900 border backdrop-blur-md flex flex-col items-center justify-center text-cyan-200 clip-chamfer shadow-xl cursor-pointer active:scale-95 transition ${
+              isLowAmmo ? 'border-amber-400/75' : 'border-cyan-500/50'
+            }`}
+            title="Switch Weapon"
+          >
+            <div className="flex items-center gap-1 text-[9px] font-mono font-black uppercase text-white">
+              <span
+                className="w-1.5 h-1.5 rounded-full shrink-0"
+                style={{ backgroundColor: weaponCfg.color }}
+              />
+              <span>{weaponMeta.tag}</span>
+              <RefreshCw className="w-2.5 h-2.5 text-cyan-400" />
+            </div>
+            <span
+              className={`text-[10px] font-mono font-bold mt-0.5 ${
+                isLowAmmo ? 'text-amber-300' : 'text-cyan-300'
+              }`}
+            >
+              {ammoLabel}
+            </span>
+            <div
+              ref={cooldownBarRef}
+              style={{ transform: 'scaleX(0)' }}
+              className="absolute bottom-0 inset-x-0 h-0.5 bg-cyan-400 origin-left pointer-events-none"
+            />
+          </button>
+        </div>
 
         <div className="flex flex-col items-center gap-2">
           <button
@@ -436,71 +684,103 @@ export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps
             </span>
           </button>
 
-          <button
-            type="button"
-            onTouchStart={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              lastButtonTouchMsRef.current.boost = performance.now();
-              handleBoostStart();
-            }}
-            onTouchEnd={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              lastButtonTouchMsRef.current.boost = performance.now();
-              handleBoostEnd();
-            }}
-            onTouchCancel={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              lastButtonTouchMsRef.current.boost = performance.now();
-              handleBoostEnd();
-            }}
-            onMouseDown={() => {
-              if (shouldIgnoreSyntheticMouse(lastButtonTouchMsRef.current.boost)) return;
-              handleBoostStart();
-            }}
-            onMouseUp={() => {
-              if (shouldIgnoreSyntheticMouse(lastButtonTouchMsRef.current.boost)) return;
-              handleBoostEnd();
-            }}
-            onMouseLeave={() => {
-              if (isBoostingDirectRef.current) handleBoostEnd();
-            }}
-            className={`w-14 h-14 sm:w-16 sm:h-16 clip-chamfer backdrop-blur-md flex flex-col items-center justify-center text-white border transition cursor-pointer shadow-xl ${
-              isBoostingDirect
-                ? 'bg-amber-500/90 border-amber-200 scale-95 glow-amber'
-                : 'bg-amber-950/75 hover:bg-amber-900/80 border-amber-400/65 text-amber-200 glow-amber'
-            }`}
-            title="Jetpack Boost"
-          >
-            <Flame className="w-5 h-5 text-amber-300" />
-            <span className="text-[8px] font-mono font-black uppercase tracking-wider mt-0.5">
-              Boost
-            </span>
-          </button>
+          {showTouchBoostButton && (
+            <button
+              type="button"
+              onTouchStart={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                lastButtonTouchMsRef.current.boost = performance.now();
+                handleBoostStart();
+              }}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                lastButtonTouchMsRef.current.boost = performance.now();
+                handleBoostEnd();
+              }}
+              onTouchCancel={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                lastButtonTouchMsRef.current.boost = performance.now();
+                handleBoostEnd();
+              }}
+              onMouseDown={() => {
+                if (shouldIgnoreSyntheticMouse(lastButtonTouchMsRef.current.boost)) return;
+                handleBoostStart();
+              }}
+              onMouseUp={() => {
+                if (shouldIgnoreSyntheticMouse(lastButtonTouchMsRef.current.boost)) return;
+                handleBoostEnd();
+              }}
+              onMouseLeave={() => {
+                if (isBoostingDirectRef.current) handleBoostEnd();
+              }}
+              className={`w-14 h-14 sm:w-16 sm:h-16 clip-chamfer backdrop-blur-md flex flex-col items-center justify-center text-white border transition cursor-pointer shadow-xl ${
+                isBoostingDirect
+                  ? 'bg-amber-500/90 border-amber-200 scale-95 glow-amber'
+                  : 'bg-amber-950/75 hover:bg-amber-900/80 border-amber-400/65 text-amber-200 glow-amber'
+              }`}
+              title="Jetpack Boost"
+            >
+              <Flame className="w-5 h-5 text-amber-300" />
+              <span className="text-[8px] font-mono font-black uppercase tracking-wider mt-0.5">
+                Boost
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* 4. QUIET PASSIVE TOUCH HINTS (Only when idle) */}
-      {showTouchHints && !leftOrigin && (
-        <div className="absolute left-5 bottom-8 pointer-events-none opacity-30 flex flex-col items-center gap-1">
+      {/* 4. QUIET PASSIVE TOUCH HINTS (Only when idle; adapts automatically to left-handed mode) */}
+      {showTouchHints && !moveOrigin && (
+        <div
+          style={
+            isLeftHanded
+              ? {
+                  marginRight: 'env(safe-area-inset-right, 0px)',
+                  marginBottom: 'env(safe-area-inset-bottom, 0px)',
+                }
+              : {
+                  marginLeft: 'env(safe-area-inset-left, 0px)',
+                  marginBottom: 'env(safe-area-inset-bottom, 0px)',
+                }
+          }
+          className={`absolute bottom-8 short:bottom-4 pointer-events-none opacity-30 flex flex-col items-center gap-1 ${
+            isLeftHanded ? 'right-6' : 'left-5'
+          }`}
+        >
           <div className="w-12 h-12 rounded-full border border-dashed border-cyan-400/60 flex items-center justify-center">
             <div className="w-3 h-3 rounded-full bg-cyan-400/60" />
           </div>
           <span className="text-[8px] font-mono text-cyan-300 tracking-widest uppercase">
-            Move
+            Move / Up Boost
           </span>
         </div>
       )}
 
-      {showTouchHints && !rightOrigin && (
-        <div className="absolute right-36 bottom-8 pointer-events-none opacity-30 hidden sm:flex flex-col items-center gap-1">
+      {showTouchHints && !aimOrigin && (
+        <div
+          style={
+            isLeftHanded
+              ? {
+                  marginLeft: 'env(safe-area-inset-left, 0px)',
+                  marginBottom: 'env(safe-area-inset-bottom, 0px)',
+                }
+              : {
+                  marginRight: 'env(safe-area-inset-right, 0px)',
+                  marginBottom: 'env(safe-area-inset-bottom, 0px)',
+                }
+          }
+          className={`absolute bottom-8 short:bottom-4 pointer-events-none opacity-30 hidden short-wide:flex sm:flex flex-col items-center gap-1 ${
+            isLeftHanded ? 'left-36' : 'right-36'
+          }`}
+        >
           <div className="w-12 h-12 rounded-full border border-dashed border-rose-400/60 flex items-center justify-center">
             <div className="w-3 h-3 rounded-full bg-rose-400/60" />
           </div>
           <span className="text-[8px] font-mono text-rose-300 tracking-widest uppercase">
-            Aim / Fire
+            {touchAimMode === 'precision' ? 'Aim • Edge Fire' : 'Aim / Fire'}
           </span>
         </div>
       )}
