@@ -5,6 +5,7 @@ import { renderMinimap, type MinimapPlayerBlip } from '../map/renderMinimap';
 import { raycastMapTerrain } from '../map/terrainGeometry';
 import {
   createBackdropCache,
+  getMapThemePalette,
   renderBackdropWorldProps,
   renderProceduralBackdrop,
   resolveMapTheme,
@@ -12,7 +13,13 @@ import {
 } from '../map/renderBackdrop';
 import { renderPlayer, renderRagdoll, type Player, type RagdollInstance } from '../player';
 import { worldToScreen, type Camera } from '../camera';
-import { renderBullets, renderParticles, renderWeaponPickups, useCombatStore } from '../combat';
+import {
+  renderBlastEffects,
+  renderBullets,
+  renderParticles,
+  renderWeaponPickups,
+  useCombatStore,
+} from '../combat';
 import { WEAPONS } from '../combat/weaponsConfig';
 import { renderFlags, useCTFStore } from '../ctf';
 import { useSettingsStore } from '../settings/settingsStore';
@@ -203,6 +210,205 @@ function drawOffscreenFlagIndicator(
   ctx.restore();
 }
 
+function drawOverscanBrandEmblem(
+  ctx: CanvasRenderingContext2D,
+  centerX: number,
+  centerY: number,
+  stripWidth: number,
+  trimColor: string,
+  sideLabel: string,
+) {
+  if (stripWidth < 30) return;
+
+  const alpha = Math.max(0, Math.min(0.68, ((stripWidth - 26) / 64) * 0.68));
+  if (alpha <= 0.02) return;
+
+  const fitScale = Math.max(0.38, Math.min(1.05, (stripWidth - 20) / 168));
+
+  ctx.save();
+  ctx.translate(centerX, centerY);
+  ctx.scale(fitScale, fitScale);
+  ctx.globalAlpha = alpha;
+
+  // Subtle tactical micro-tag above logo
+  ctx.font = 'bold 8.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = trimColor;
+  ctx.fillText(`// OMEGA • ${sideLabel} //`, 0, -20);
+
+  // Two-tone AEROSTRIKE title matching hangar crest
+  ctx.font = 'italic 900 20px system-ui, -apple-system, Segoe UI, sans-serif';
+  const aeroW = ctx.measureText('AERO').width;
+  const strikeW = ctx.measureText('STRIKE').width;
+  const totalW = aeroW + strikeW;
+  const startX = -totalW / 2;
+
+  ctx.textAlign = 'left';
+  ctx.shadowColor = 'rgba(34, 211, 238, 0.35)';
+  ctx.shadowBlur = 12;
+  ctx.fillStyle = '#e2e8f0';
+  ctx.fillText('AERO', startX, 0);
+  ctx.fillStyle = '#22d3ee';
+  ctx.fillText('STRIKE', startX + aeroW, 0);
+  ctx.shadowBlur = 0;
+
+  // Decorative perimeter accent bar underneath
+  const lineW = Math.min(130, totalW * 0.86);
+  const lineGrad = ctx.createLinearGradient(-lineW / 2, 0, lineW / 2, 0);
+  lineGrad.addColorStop(0, 'rgba(34, 211, 238, 0)');
+  lineGrad.addColorStop(0.5, trimColor);
+  lineGrad.addColorStop(1, 'rgba(34, 211, 238, 0)');
+  ctx.strokeStyle = lineGrad;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(-lineW / 2, 16);
+  ctx.lineTo(lineW / 2, 16);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+export function drawArenaPerimeterOverscan(
+  ctx: CanvasRenderingContext2D,
+  map: GameMap,
+  camera: Camera,
+  viewW: number,
+  viewH: number,
+) {
+  const zoom = camera.zoom > 0 ? camera.zoom : 1;
+  const mapLeft = (0 - camera.x) * zoom;
+  const mapRight = (map.width - camera.x) * zoom;
+  const mapTop = (0 - camera.y) * zoom;
+  const mapBottom = (map.height - camera.y) * zoom;
+
+  const leftStripW = Math.max(0, Math.min(viewW, mapLeft));
+  const rightStripStart = Math.max(0, Math.min(viewW, mapRight));
+  const rightStripW = Math.max(0, viewW - rightStripStart);
+  const topStripH = Math.max(0, Math.min(viewH, mapTop));
+  const botStripStart = Math.max(0, Math.min(viewH, mapBottom));
+  const botStripH = Math.max(0, viewH - botStripStart);
+
+  if (leftStripW <= 0.5 && rightStripW <= 0.5 && topStripH <= 0.5 && botStripH <= 0.5) {
+    return;
+  }
+
+  const palette = getMapThemePalette(map);
+  const midStartX = leftStripW;
+  const midWidth = Math.max(0, rightStripStart - leftStripW);
+
+  ctx.save();
+
+  // 1. Dark tactical containment veil outside arena bounds (non-overlapping rects)
+  ctx.fillStyle = 'rgba(4, 7, 15, 0.78)';
+  if (leftStripW > 0.5) {
+    ctx.fillRect(0, 0, leftStripW, viewH);
+  }
+  if (rightStripW > 0.5) {
+    ctx.fillRect(rightStripStart, 0, rightStripW, viewH);
+  }
+  if (topStripH > 0.5 && midWidth > 0) {
+    ctx.fillRect(midStartX, 0, midWidth, topStripH);
+  }
+  if (botStripH > 0.5 && midWidth > 0) {
+    ctx.fillRect(midStartX, botStripStart, midWidth, botStripH);
+  }
+
+  // 2. Subtle diagonal containment stripes along visible out-of-bounds margins
+  const drawStripeRegion = (rx: number, ry: number, rw: number, rh: number) => {
+    if (rw < 4 || rh < 4) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(rx, ry, rw, rh);
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.045)';
+    ctx.lineWidth = 1;
+    const step = 28;
+    ctx.beginPath();
+    for (let sx = rx - rh; sx <= rx + rw + rh; sx += step) {
+      ctx.moveTo(sx, ry);
+      ctx.lineTo(sx + rh, ry + rh);
+    }
+    ctx.stroke();
+    ctx.restore();
+  };
+
+  drawStripeRegion(0, 0, leftStripW, viewH);
+  drawStripeRegion(rightStripStart, 0, rightStripW, viewH);
+  drawStripeRegion(midStartX, 0, midWidth, topStripH);
+  drawStripeRegion(midStartX, botStripStart, midWidth, botStripH);
+
+  // 3. Glowing arena perimeter containment border
+  ctx.strokeStyle = palette.terrainTrim;
+  ctx.globalAlpha = 0.45;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(
+    Math.round(mapLeft) + 0.5,
+    Math.round(mapTop) + 0.5,
+    Math.max(0, mapRight - mapLeft),
+    Math.max(0, mapBottom - mapTop),
+  );
+  ctx.globalAlpha = 1;
+
+  // 4. Side Game Branding ("AEROSTRIKE") on Left & Right overscan sides
+  if (leftStripW >= 30) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, leftStripW, viewH);
+    ctx.clip();
+    drawOverscanBrandEmblem(
+      ctx,
+      leftStripW / 2,
+      viewH * 0.48,
+      leftStripW,
+      palette.terrainTrim,
+      'WEST BOUNDARY',
+    );
+    ctx.restore();
+  }
+
+  if (rightStripW >= 30) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(rightStripStart, 0, rightStripW, viewH);
+    ctx.clip();
+    drawOverscanBrandEmblem(
+      ctx,
+      rightStripStart + rightStripW / 2,
+      viewH * 0.48,
+      rightStripW,
+      palette.terrainTrim,
+      'EAST BOUNDARY',
+    );
+    ctx.restore();
+  }
+
+  // Subtle top/bottom perimeter watermark when overscanning vertically (e.g., small arenas)
+  if (topStripH >= 38 && midWidth >= 140) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(0.45, ((topStripH - 32) / 40) * 0.45);
+    ctx.font = 'bold 9px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = palette.terrainTrim;
+    ctx.fillText('AEROSTRIKE // UPPER PERIMETER', midStartX + midWidth / 2, topStripH / 2);
+    ctx.restore();
+  }
+
+  if (botStripH >= 38 && midWidth >= 140) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(0.45, ((botStripH - 32) / 40) * 0.45);
+    ctx.font = 'bold 9px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = palette.terrainTrim;
+    ctx.fillText('AEROSTRIKE // LOWER PERIMETER', midStartX + midWidth / 2, botStripStart + botStripH / 2);
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
 export function renderArenaFrame(params: RenderArenaFrameParams) {
   const {
     ctx,
@@ -268,6 +474,7 @@ export function renderArenaFrame(params: RenderArenaFrameParams) {
     renderRagdoll(ctx, ragdoll, timeSec);
   }
 
+  renderBlastEffects(ctx, engineWorld.blastEffects);
   renderBullets(ctx, engineWorld.bullets);
   renderParticles(ctx, engineWorld.particles);
 
@@ -477,6 +684,8 @@ export function renderArenaFrame(params: RenderArenaFrameParams) {
   }
 
   ctx.restore();
+
+  drawArenaPerimeterOverscan(ctx, map, currentCamera, viewW, viewH);
 
   if (engineWorld.damageIndicators.length > 0) {
     const cx = viewW / 2;

@@ -39,7 +39,11 @@ import { useMatchStatsStore } from '../combat/statsStore';
 import { useCTFStore } from '../ctf/ctfStore';
 import { useAvatarStore } from '../avatar/avatarStore';
 import { useMapStore } from '../map/mapStore';
-import { WEAPONS } from '../combat/weaponsConfig';
+import {
+  WEAPONS,
+  computeProjectileLaunchVelocity,
+  getProjectileLifespanFrames,
+} from '../combat/weaponsConfig';
 import { getSafeMuzzlePoint } from '../combat/updateBullets';
 import {
   clearOptimisticClaims,
@@ -106,7 +110,7 @@ function handleShootMessage(
     shoot.originX,
     shoot.originY,
     shoot.aimAngle,
-    18,
+    shoot.weaponType === 'grenade' ? 16 : 18,
     useMapStore.getState().selectedMap,
   );
 
@@ -114,6 +118,7 @@ function handleShootMessage(
   const spreadHalf = config.spread / 2;
   const speed = config.speed * (shoot.speedScale ?? 1);
   const bulletSeq = ctx.nextRemoteBulletId();
+  const lifespan = getProjectileLifespanFrames(config);
 
   for (let i = 0; i < config.pellets; i++) {
     const fallbackOffset =
@@ -126,6 +131,7 @@ function handleShootMessage(
         : fallbackOffset;
 
     const bulletAngle = shoot.aimAngle + angleOffset;
+    const { vx, vy } = computeProjectileLaunchVelocity(shoot.weaponType, bulletAngle, speed);
     newBullets.push({
       id: `rb_${shoot.shooterId}_${bulletSeq}_${i}`,
       shooterId: shoot.shooterId,
@@ -133,12 +139,12 @@ function handleShootMessage(
       weaponType: shoot.weaponType,
       x: muzzle.x,
       y: muzzle.y,
-      vx: Math.cos(bulletAngle) * speed,
-      vy: Math.sin(bulletAngle) * speed,
+      vx,
+      vy,
       damage: config.damage,
       blastRadius: config.blastRadius,
-      lifespan: config.blastRadius > 0 ? 80 : 50,
-      maxLifespan: config.blastRadius > 0 ? 80 : 50,
+      lifespan,
+      maxLifespan: lifespan,
     });
   }
   engineWorld.addBullets(newBullets);

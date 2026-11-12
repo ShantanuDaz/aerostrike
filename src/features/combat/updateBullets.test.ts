@@ -199,4 +199,79 @@ describe('updateBullets swept collision, muzzle safety, and splash', () => {
     expect(res.activeBullets[0].vx).toBeGreaterThan(10);
     expect(res.activeBullets[0].lifespan).toBeCloseTo(4, 3);
   });
+
+  it('bounces frag grenades off walls with gravity and detonates when fuse expires or on direct enemy hit', () => {
+    const map = makeMap([
+      { x: 300, y: 300, width: 30, height: 200, type: 'wall' },
+      { x: 0, y: 450, width: 600, height: 50, type: 'ground' },
+    ]);
+
+    // 1. Bounces off wall instead of disappearing
+    const wallBounceGrenade = makeBullet({
+      id: 'g_wall',
+      weaponType: 'grenade',
+      x: 292,
+      y: 380,
+      vx: 14,
+      vy: 0,
+      damage: 95,
+      blastRadius: 132,
+      lifespan: 40,
+      maxLifespan: 95,
+    });
+
+    const bounceRes = updateBullets([wallBounceGrenade], map, [], 1 / 60);
+    expect(bounceRes.hits).toHaveLength(0);
+    expect(bounceRes.activeBullets).toHaveLength(1);
+    expect(bounceRes.activeBullets[0].vx).toBeLessThan(0); // reflected away from wall
+    expect(bounceRes.activeBullets[0].x).toBeLessThan(300);
+
+    // 2. Fuse expiry detonates and deals splash damage
+    const expiringGrenade = makeBullet({
+      id: 'g_fuse',
+      weaponType: 'grenade',
+      shooterId: 'shooter_blue',
+      team: 'blue',
+      x: 150,
+      y: 400,
+      vx: 0,
+      vy: 0,
+      damage: 95,
+      blastRadius: 132,
+      lifespan: 0.8,
+      maxLifespan: 95,
+    });
+    const enemyNearby = makeTarget({ id: 'enemy_near_fuse', team: 'red', x: 185, y: 400 });
+    const fuseRes = updateBullets([expiringGrenade], map, [enemyNearby], 1 / 60);
+    expect(fuseRes.activeBullets).toHaveLength(0);
+    expect(fuseRes.hits.some((h) => h.targetId === 'enemy_near_fuse' && h.weaponType === 'grenade')).toBe(true);
+    expect(fuseRes.newParticles.length).toBeGreaterThan(20);
+    expect(fuseRes.explosions).toHaveLength(1);
+    expect(fuseRes.explosions[0].x).toBe(150);
+    expect(fuseRes.explosions[0].y).toBeCloseTo(400.34, 2);
+    expect(fuseRes.explosions[0].radius).toBe(132);
+    expect(fuseRes.explosions[0].weaponType).toBe('grenade');
+
+    // 3. Direct hit on enemy detonates immediately
+    const directGrenade = makeBullet({
+      id: 'g_direct',
+      weaponType: 'grenade',
+      shooterId: 'shooter_blue',
+      team: 'blue',
+      x: 195,
+      y: 400,
+      vx: 20,
+      vy: 0,
+      damage: 95,
+      blastRadius: 132,
+      lifespan: 50,
+      maxLifespan: 95,
+    });
+    const directEnemy = makeTarget({ id: 'enemy_direct', team: 'red', x: 210, y: 400 });
+    const directRes = updateBullets([directGrenade], map, [directEnemy], 1 / 60);
+    expect(directRes.activeBullets).toHaveLength(0);
+    expect(directRes.hits.some((h) => h.targetId === 'enemy_direct' && h.damage > 80)).toBe(true);
+    expect(directRes.explosions).toHaveLength(1);
+    expect(directRes.explosions[0].radius).toBe(132);
+  });
 });

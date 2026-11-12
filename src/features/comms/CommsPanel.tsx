@@ -446,7 +446,7 @@ export function HudCommsOverlay({ isTouchHUD }: HudCommsOverlayProps) {
       }
       className={
         isTouchHUD
-          ? 'fixed bottom-[140px] min-[540px]:bottom-2.5 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-1.5 pointer-events-none max-w-[90vw]'
+          ? 'fixed bottom-[124px] min-[540px]:bottom-2 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-1 pointer-events-none max-w-[90vw]'
           : 'fixed bottom-3 left-3 z-30 flex flex-col items-start gap-1.5 pointer-events-none w-[290px] sm:w-[320px]'
       }
     >
@@ -558,7 +558,11 @@ export function HudCommsOverlay({ isTouchHUD }: HudCommsOverlayProps) {
       )}
 
       {/* Always-Available Quick-Send Emoji Bar + Chat Toggle Pill */}
-      <div className="pointer-events-auto flex items-center gap-1 px-1.5 py-1 bg-slate-950/85 border border-cyan-500/35 clip-chamfer backdrop-blur-md shadow-xl">
+      <div
+        className={`pointer-events-auto flex items-center gap-0.5 sm:gap-1 ${
+          isTouchHUD ? 'px-1 py-0.5' : 'px-1.5 py-1'
+        } bg-slate-950/85 border border-cyan-500/35 clip-chamfer backdrop-blur-md shadow-xl`}
+      >
         <button
           type="button"
           onClick={() => {

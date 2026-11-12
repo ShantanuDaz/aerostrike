@@ -17,6 +17,7 @@ export const WEAPON_INDEX_TO_TYPE: readonly WeaponType[] = [
   'shotgun',
   'sniper',
   'rocket',
+  'grenade',
 ];
 
 const WEAPON_TYPE_TO_INDEX: Record<WeaponType, number> = {
@@ -25,6 +26,7 @@ const WEAPON_TYPE_TO_INDEX: Record<WeaponType, number> = {
   shotgun: 2,
   sniper: 3,
   rocket: 4,
+  grenade: 5,
 };
 
 export interface QuantizedPlayerState {

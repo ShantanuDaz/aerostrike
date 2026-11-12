@@ -1,5 +1,12 @@
 import type { AvatarConfig } from '../avatar/types';
-import type { ActiveWeaponPickup, Bullet, Particle, WeaponType } from '../combat/types';
+import type {
+  ActiveWeaponPickup,
+  BlastVisualEffect,
+  Bullet,
+  ExplosionEvent,
+  Particle,
+  WeaponType,
+} from '../combat/types';
 import type { Team } from '../ctf/types';
 import type { ActiveRefillStation, GameMap } from '../map/types';
 import { isNewerSeq8, normalizeAngleRad } from '../network/fastProtocol';
@@ -32,10 +39,11 @@ export function buildActiveStations(map: GameMap): ActiveRefillStation[] {
   }));
 }
 
-const MAX_PARTICLES = 180;
+const MAX_PARTICLES = 320;
 const MAX_BULLETS = 220;
 const MAX_FLOATING_TEXTS = 32;
 const MAX_DAMAGE_INDICATORS = 6;
+const MAX_BLAST_EFFECTS = 16;
 const REMOTE_HALF_W = 14;
 const REMOTE_HALF_H = 25;
 
@@ -132,6 +140,7 @@ class GameEngineWorld {
   public soloBots: SoloBot[] = [];
   public floatingTexts: FloatingDamageText[] = [];
   public damageIndicators: DamageIndicator[] = [];
+  public blastEffects: BlastVisualEffect[] = [];
   public soloConfig: SoloSkirmishConfig = {
     squadSize: '2v2',
     difficulty: 'veteran',
@@ -184,6 +193,7 @@ class GameEngineWorld {
     this.particles = [];
     this.floatingTexts = [];
     this.damageIndicators = [];
+    this.blastEffects = [];
     this.soloBots = [];
     if (clearPendingCooldowns) {
       this.pendingPickupCooldowns.clear();
@@ -515,6 +525,20 @@ class GameEngineWorld {
     }
   }
 
+  public addBlastEffect(evt: ExplosionEvent) {
+    this.blastEffects.push({
+      x: evt.x,
+      y: evt.y,
+      radius: evt.radius,
+      weaponType: evt.weaponType,
+      age: 0,
+      duration: evt.weaponType === 'grenade' ? 0.56 : 0.48,
+    });
+    if (this.blastEffects.length > MAX_BLAST_EFFECTS) {
+      this.blastEffects.splice(0, this.blastEffects.length - MAX_BLAST_EFFECTS);
+    }
+  }
+
   public addDamageIndicator(angle: number, damage: number) {
     hapticDamage();
     const intensity = Math.min(1, Math.max(0.35, damage / 45));
@@ -546,6 +570,14 @@ class GameEngineWorld {
       this.damageIndicators[i].life -= dt;
       if (this.damageIndicators[i].life <= 0) {
         this.damageIndicators.splice(i, 1);
+      }
+    }
+
+    for (let i = this.blastEffects.length - 1; i >= 0; i--) {
+      const fx = this.blastEffects[i];
+      fx.age += dt;
+      if (fx.age >= fx.duration) {
+        this.blastEffects.splice(i, 1);
       }
     }
   }

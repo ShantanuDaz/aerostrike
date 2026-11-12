@@ -2,7 +2,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { music } from '../audio/musicEngine';
 import { sounds } from '../audio/soundEngine';
 import { MAX_CAMERA_ZOOM, MIN_CAMERA_ZOOM } from '../camera/cameraMath';
-import { DEFAULT_SETTINGS, useSettingsStore } from './settingsStore';
+import {
+  DEFAULT_SETTINGS,
+  DEFAULT_TOUCH_CONTROL_SCALE,
+  MAX_TOUCH_CONTROL_OPACITY,
+  MAX_TOUCH_CONTROL_SCALE,
+  MAX_TOUCH_DEADZONE,
+  MIN_TOUCH_CONTROL_OPACITY,
+  MIN_TOUCH_CONTROL_SCALE,
+  MIN_TOUCH_DEADZONE,
+  useSettingsStore,
+} from './settingsStore';
 
 describe('settingsStore audio decoupling & zoom/touch settings', () => {
   afterEach(() => {
@@ -59,5 +69,34 @@ describe('settingsStore audio decoupling & zoom/touch settings', () => {
     expect(state.hudScale).toBe(DEFAULT_SETTINGS.hudScale);
     expect(state.touchAimMode).toBe(DEFAULT_SETTINGS.touchAimMode);
     expect(state.touchLayout).toBe(DEFAULT_SETTINGS.touchLayout);
+    expect(state.touchControlScale).toBe(DEFAULT_TOUCH_CONTROL_SCALE);
+  });
+
+  it('clamps touchControlScale, touchControlOpacity, and touchStickDeadzone within bounds', () => {
+    useSettingsStore.getState().updateSettings({
+      touchControlScale: 3.0,
+      touchControlOpacity: 2.5,
+      touchStickDeadzone: 99,
+      showTouchGrenadeButton: false,
+      touchAimMode: 'instant',
+    });
+
+    let state = useSettingsStore.getState();
+    expect(state.touchControlScale).toBe(MAX_TOUCH_CONTROL_SCALE);
+    expect(state.touchControlOpacity).toBe(MAX_TOUCH_CONTROL_OPACITY);
+    expect(state.touchStickDeadzone).toBe(MAX_TOUCH_DEADZONE);
+    expect(state.showTouchGrenadeButton).toBe(false);
+    expect(state.touchAimMode).toBe('instant');
+
+    useSettingsStore.getState().updateSettings({
+      touchControlScale: 0.1,
+      touchControlOpacity: 0.05,
+      touchStickDeadzone: 1,
+    });
+
+    state = useSettingsStore.getState();
+    expect(state.touchControlScale).toBe(MIN_TOUCH_CONTROL_SCALE);
+    expect(state.touchControlOpacity).toBe(MIN_TOUCH_CONTROL_OPACITY);
+    expect(state.touchStickDeadzone).toBe(MIN_TOUCH_DEADZONE);
   });
 });

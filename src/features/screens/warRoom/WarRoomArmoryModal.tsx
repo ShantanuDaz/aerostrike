@@ -25,9 +25,9 @@ interface WarRoomArmoryModalProps {
 
 const TABS: { id: SettingsTab; label: string; icon: typeof User }[] = [
   { id: 'avatar', label: 'Pilot & Suit', icon: User },
-  { id: 'display', label: 'Display & Zoom', icon: Monitor },
-  { id: 'audio', label: 'Audio', icon: Headphones },
   { id: 'controls', label: 'Controls', icon: Gamepad2 },
+  { id: 'display', label: 'Display & HUD', icon: Monitor },
+  { id: 'audio', label: 'Audio', icon: Headphones },
 ];
 
 export function WarRoomArmoryModal({
@@ -101,16 +101,16 @@ export function WarRoomArmoryModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="cyber-panel clip-chamfer-lg shadow-2xl w-full max-w-4xl max-h-[93dvh] flex flex-col overflow-hidden border border-cyan-500/50 glow-cyan animate-in zoom-in-95 duration-150"
+        className="cyber-panel clip-chamfer-lg shadow-2xl w-full max-w-5xl h-[94dvh] sm:h-[88dvh] flex flex-col overflow-hidden border border-cyan-500/50 glow-cyan animate-in zoom-in-95 duration-150"
       >
-        <div className="shrink-0 flex items-center justify-between px-4 sm:px-5 py-2.5 sm:py-3 border-b border-cyan-500/20 bg-slate-950/90">
+        <div className="shrink-0 flex items-center justify-between px-3 sm:px-5 py-2 sm:py-2.5 border-b border-cyan-500/20 bg-slate-950/90">
           <div className="flex items-center gap-2 min-w-0">
             <Wrench className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400 shrink-0" />
             <div className="min-w-0">
               <h3 className="text-xs sm:text-sm font-black text-white tracking-wider uppercase font-mono truncate">
                 War Room Armory &amp; Settings
               </h3>
-              <span className="text-[9px] font-mono text-emerald-400 uppercase block truncate">
+              <span className="hidden sm:block text-[9px] font-mono text-emerald-400 uppercase truncate">
                 Suit &amp; weapon changes sync live to squadmates
               </span>
             </div>
@@ -132,7 +132,7 @@ export function WarRoomArmoryModal({
         </div>
 
         {/* Tab Strip */}
-        <div className="shrink-0 grid grid-cols-2 sm:grid-cols-4 gap-1.5 px-3.5 sm:px-5 py-2 bg-slate-950/80 border-b border-slate-800">
+        <div className="shrink-0 grid grid-cols-4 gap-1 sm:gap-1.5 px-2.5 sm:px-5 py-1.5 sm:py-2 bg-slate-950/80 border-b border-slate-800">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -148,7 +148,7 @@ export function WarRoomArmoryModal({
                   }
                   setActiveTab(tab.id);
                 }}
-                className={`flex items-center justify-center gap-1.5 px-2.5 py-2 text-[10px] sm:text-xs font-mono font-bold uppercase tracking-wider clip-chamfer border transition cursor-pointer ${
+                className={`flex items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-1.5 sm:py-2 text-[9.5px] sm:text-xs font-mono font-bold uppercase tracking-wider clip-chamfer border transition cursor-pointer ${
                   active
                     ? 'bg-cyan-500/20 border-cyan-400 text-white'
                     : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:text-white'
@@ -163,7 +163,7 @@ export function WarRoomArmoryModal({
           })}
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto cyber-scroll p-3.5 sm:p-5 bg-slate-950/60">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden p-2.5 sm:p-4 bg-slate-950/60">
           {activeTab === 'avatar' && <PilotAvatarTab />}
           {activeTab === 'display' && <DisplayHudTab />}
           {activeTab === 'audio' && (

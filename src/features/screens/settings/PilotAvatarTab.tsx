@@ -126,20 +126,20 @@ export function PilotAvatarTab() {
 
       ctx.strokeStyle = 'rgba(0, 240, 255, 0.06)';
       ctx.lineWidth = 1;
-      for (let gx = 0; gx < w; gx += 28) {
+      for (let gx = 0; gx < w; gx += 26) {
         ctx.beginPath();
         ctx.moveTo(gx, 0);
         ctx.lineTo(gx, h);
         ctx.stroke();
       }
-      for (let gy = 0; gy < h; gy += 28) {
+      for (let gy = 0; gy < h; gy += 26) {
         ctx.beginPath();
         ctx.moveTo(0, gy);
         ctx.lineTo(w, gy);
         ctx.stroke();
       }
 
-      const glow = ctx.createRadialGradient(w / 2, h / 2, 8, w / 2, h / 2, 110);
+      const glow = ctx.createRadialGradient(w / 2, h / 2, 8, w / 2, h / 2, 108);
       glow.addColorStop(0, 'rgba(0, 240, 255, 0.22)');
       glow.addColorStop(1, 'transparent');
       ctx.fillStyle = glow;
@@ -148,7 +148,7 @@ export function PilotAvatarTab() {
       ctx.strokeStyle = 'rgba(0, 240, 255, 0.45)';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.ellipse(w / 2, h / 2 + 64, 58, 12, 0, 0, Math.PI * 2);
+      ctx.ellipse(w / 2, h / 2 + 64, 56, 12, 0, 0, Math.PI * 2);
       ctx.stroke();
 
       const ptr = pointerAimRef.current;
@@ -160,7 +160,7 @@ export function PilotAvatarTab() {
       ctx.translate(w / 2, h / 2 + Math.sin(timeSec * 2.5) * 4);
       renderAvatar(ctx, avatarRef.current, {
         aimAngle,
-        radius: 32,
+        radius: 34,
         isBoosting: true,
         team: previewTeamRef.current === 'solo' ? undefined : previewTeamRef.current,
         showHUD: false,
@@ -189,15 +189,17 @@ export function PilotAvatarTab() {
     setAvatar({ ...DEFAULT_AVATAR, callsign: avatar.callsign });
   };
 
+  const activeHeadgearLabel =
+    HEADGEARS.find((h) => h.id === avatar.headgear)?.label ?? 'Standard';
+  const activeWeaponShort = WEAPONS[defaultWeapon].name.split(' ').pop();
+
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-      {/* Left Preview Column */}
-      <div className="xl:col-span-5 flex flex-col items-center gap-4 bg-slate-950/65 p-4 border border-cyan-500/20 clip-chamfer">
-        <div className="w-full flex items-center justify-between text-[10px] font-mono uppercase tracking-wider">
-          <span className="text-cyan-400 font-bold flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5" /> Live Hangar Rig
-          </span>
-          <div className="flex items-center gap-1">
+    <div className="flex-1 min-h-0 h-full flex flex-row gap-2 sm:gap-4 overflow-hidden">
+      {/* Pinned Left Preview Column (always visible on mobile portrait, landscape & desktop) */}
+      <div className="w-[138px] xs:w-[158px] sm:w-[225px] lg:w-[270px] shrink-0 h-full flex flex-col justify-between gap-1.5 sm:gap-2.5 bg-slate-950/75 p-2 sm:p-3 border border-cyan-500/25 clip-chamfer overflow-hidden">
+        {/* Top Team Switcher + Quick Reset */}
+        <div className="shrink-0 flex items-center justify-between gap-1">
+          <div className="flex items-center gap-0.5 sm:gap-1 min-w-0">
             {(['solo', 'blue', 'red'] as const).map((t) => (
               <button
                 key={t}
@@ -206,7 +208,7 @@ export function PilotAvatarTab() {
                   sounds.playUiClick();
                   setPreviewTeam(t);
                 }}
-                className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase cursor-pointer border ${
+                className={`px-1.5 sm:px-2 py-0.5 rounded text-[8.5px] sm:text-[9px] font-mono font-bold uppercase cursor-pointer border ${
                   previewTeam === t
                     ? t === 'red'
                       ? 'bg-rose-600/30 border-rose-400 text-rose-200'
@@ -218,134 +220,85 @@ export function PilotAvatarTab() {
               </button>
             ))}
           </div>
+
+          <button
+            type="button"
+            onClick={handleResetPilot}
+            className="shrink-0 p-1 sm:px-2 sm:py-0.5 bg-slate-900 hover:bg-rose-950/60 border border-slate-700 hover:border-rose-400/50 text-slate-400 hover:text-rose-200 rounded text-[9px] font-mono font-bold uppercase cursor-pointer flex items-center gap-1"
+            title="Reset Suit Appearance"
+          >
+            <RotateCcw className="w-3 h-3 shrink-0" />
+            <span className="hidden sm:inline">Reset</span>
+          </button>
         </div>
 
-        <canvas
-          ref={canvasRef}
-          width={260}
-          height={230}
-          onMouseMove={(e) => {
-            const r = e.currentTarget.getBoundingClientRect();
-            pointerAimRef.current = {
-              x: ((e.clientX - r.left) / r.width) * e.currentTarget.width,
-              y: ((e.clientY - r.top) / r.height) * e.currentTarget.height,
-              active: true,
-            };
-          }}
-          onMouseLeave={() => {
-            pointerAimRef.current.active = false;
-          }}
-          className="w-full max-w-[260px] rounded-xl border border-cyan-500/25 cursor-crosshair shadow-inner"
-        />
+        {/* Live Hangar Rig Canvas */}
+        <div className="relative flex-1 min-h-[110px] w-full flex items-center justify-center overflow-hidden rounded-lg border border-cyan-500/25 bg-[#070b16]">
+          <canvas
+            ref={canvasRef}
+            width={240}
+            height={220}
+            onPointerMove={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              pointerAimRef.current = {
+                x: ((e.clientX - r.left) / r.width) * e.currentTarget.width,
+                y: ((e.clientY - r.top) / r.height) * e.currentTarget.height,
+                active: true,
+              };
+            }}
+            onPointerLeave={() => {
+              pointerAimRef.current.active = false;
+            }}
+            className="w-full h-full object-contain cursor-crosshair touch-none"
+          />
+
+          <div className="pointer-events-none absolute top-1.5 left-1.5 hidden sm:flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-950/75 border border-cyan-500/25 text-[8.5px] font-mono font-bold uppercase text-cyan-300">
+            <Sparkles className="w-2.5 h-2.5" /> Live Rig
+          </div>
+
+          <div className="pointer-events-none absolute bottom-1 inset-x-1 flex items-center justify-center">
+            <span className="px-1.5 py-0.5 rounded bg-slate-950/80 border border-slate-800 text-[8px] sm:text-[9px] font-mono text-slate-300 truncate max-w-full">
+              {activeHeadgearLabel} • {activeWeaponShort}
+            </span>
+          </div>
+        </div>
 
         {/* Callsign Editor */}
-        <div className="w-full">
-          <label className="text-[10px] font-mono font-bold text-cyan-300 uppercase tracking-widest block mb-1.5">
-            Combat Callsign
+        <div className="shrink-0">
+          <label className="hidden tall:block text-[9px] font-mono font-bold text-cyan-300 uppercase tracking-widest mb-1">
+            Callsign
           </label>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <input
               type="text"
               maxLength={16}
               value={avatar.callsign}
               onChange={(e) => setAvatar({ callsign: e.target.value })}
-              className="flex-1 min-w-0 bg-slate-900 border border-slate-700 focus:border-cyan-400 px-3 py-2 text-sm font-mono font-bold text-white outline-none clip-chamfer"
+              className="flex-1 min-w-0 bg-slate-900 border border-slate-700 focus:border-cyan-400 px-2 py-1 sm:py-1.5 text-[11px] sm:text-xs font-mono font-bold text-white outline-none clip-chamfer"
               placeholder="Callsign..."
+              aria-label="Combat Callsign"
             />
             <button
               type="button"
               onClick={handleRandomCallsign}
-              className="shrink-0 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-cyan-500/30 text-amber-400 clip-chamfer cursor-pointer"
+              className="shrink-0 p-1.5 sm:px-2 sm:py-1.5 bg-slate-800 hover:bg-slate-700 border border-cyan-500/30 text-amber-400 clip-chamfer cursor-pointer"
               title="Randomize Callsign"
+              aria-label="Randomize Callsign"
             >
-              <Dices className="w-4 h-4" />
+              <Dices className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
           </div>
         </div>
-
-        {/* Starting Weapon Preview */}
-        <div className="w-full">
-          <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest block mb-1.5 flex items-center gap-1.5">
-            <Crosshair className="w-3.5 h-3.5 text-cyan-400" /> Default Starting Weapon
-          </label>
-          <div className="grid grid-cols-3 gap-1.5">
-            {WEAPON_OPTIONS.map((wId) => {
-              const active = defaultWeapon === wId;
-              return (
-                <button
-                  key={wId}
-                  type="button"
-                  onClick={() => {
-                    sounds.playWeaponSound(wId);
-                    updateSettings({ defaultWeapon: wId });
-                  }}
-                  className={`px-2 py-1.5 text-[11px] font-mono font-bold uppercase border clip-chamfer cursor-pointer transition ${
-                    active
-                      ? 'bg-cyan-500/25 border-cyan-400 text-white'
-                      : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {WEAPONS[wId].name.split(' ').pop()}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleResetPilot}
-          className="text-[11px] font-mono text-slate-400 hover:text-rose-300 flex items-center gap-1.5 cursor-pointer pt-1"
-        >
-          <RotateCcw className="w-3 h-3" /> Reset Suit Appearance
-        </button>
       </div>
 
-      {/* Right Customization Controls */}
-      <div className="xl:col-span-7 flex flex-col gap-5">
-        {/* Suit Colorway + Custom Picker */}
-        <div>
-          <label className="text-[11px] font-mono font-bold text-slate-300 uppercase tracking-widest block mb-2 flex items-center gap-1.5">
-            <Palette className="w-3.5 h-3.5 text-cyan-400" /> Suit Armor Colorway
+      {/* Scrollable Right Customization Column */}
+      <div className="flex-1 min-w-0 h-full overflow-y-auto cyber-scroll pr-1 flex flex-col gap-3.5 sm:gap-4 pb-2">
+        {/* Tactical Headgear & Gear Accent (First for instant customization) */}
+        <div className="bg-slate-950/55 border border-slate-800/90 p-2.5 sm:p-3.5 clip-chamfer space-y-2.5">
+          <label className="text-[10px] sm:text-[11px] font-mono font-bold text-cyan-300 uppercase tracking-widest flex items-center gap-1.5">
+            <Shield className="w-3.5 h-3.5 text-cyan-400 shrink-0" /> Tactical Headgear
           </label>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            {SUIT_SWATCHES.map((color) => (
-              <button
-                key={color}
-                type="button"
-                onClick={() => {
-                  sounds.playUiClick();
-                  setAvatar({ bodyColor: color });
-                }}
-                style={{ backgroundColor: color }}
-                className={`w-7 h-7 rounded-full border-2 transition-transform cursor-pointer ${
-                  avatar.bodyColor.toLowerCase() === color.toLowerCase()
-                    ? 'border-white scale-120 shadow-lg shadow-cyan-500/40'
-                    : 'border-transparent opacity-80 hover:opacity-100 hover:scale-105'
-                }`}
-              />
-            ))}
-            <label
-              className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 border border-slate-700 hover:border-cyan-400 rounded-full text-[10px] font-mono text-slate-300 cursor-pointer"
-              title="Custom Armor Color"
-            >
-              <input
-                type="color"
-                value={avatar.bodyColor}
-                onChange={(e) => setAvatar({ bodyColor: e.target.value })}
-                className="w-4 h-4 bg-transparent border-0 cursor-pointer p-0"
-              />
-              <span>Custom</span>
-            </label>
-          </div>
-        </div>
-
-        {/* Headgear & Gear Accent */}
-        <div>
-          <label className="text-[11px] font-mono font-bold text-slate-300 uppercase tracking-widest block mb-2 flex items-center gap-1.5">
-            <Shield className="w-3.5 h-3.5 text-cyan-400" /> Tactical Headgear
-          </label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mb-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
             {HEADGEARS.map((h) => (
               <button
                 key={h.id}
@@ -354,7 +307,7 @@ export function PilotAvatarTab() {
                   sounds.playUiClick();
                   setAvatar({ headgear: h.id });
                 }}
-                className={`px-2 sm:px-2.5 py-2 text-[11px] sm:text-xs font-medium border transition text-center cursor-pointer clip-chamfer ${
+                className={`px-1.5 sm:px-2.5 py-1.5 sm:py-2 text-[10.5px] sm:text-xs font-medium border transition text-center cursor-pointer clip-chamfer leading-tight ${
                   avatar.headgear === h.id
                     ? 'bg-cyan-500/25 border-cyan-400 text-white font-bold'
                     : 'bg-slate-950/70 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
@@ -364,8 +317,8 @@ export function PilotAvatarTab() {
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] font-mono text-slate-400 uppercase mr-1">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap pt-1 border-t border-slate-800/70">
+            <span className="text-[9.5px] font-mono text-slate-400 uppercase mr-0.5">
               Gear Tint:
             </span>
             {GEAR_SWATCHES.map((c) => (
@@ -379,19 +332,58 @@ export function PilotAvatarTab() {
                 style={{ backgroundColor: c }}
                 className={`w-5 h-5 rounded-full border transition cursor-pointer ${
                   avatar.headgearColor === c
-                    ? 'border-white scale-120'
+                    ? 'border-white scale-115 shadow-sm'
                     : 'border-slate-700 opacity-80 hover:opacity-100'
                 }`}
+                aria-label={`Gear tint ${c}`}
               />
             ))}
           </div>
         </div>
 
+        {/* Suit Colorway + Custom Picker */}
+        <div className="bg-slate-950/55 border border-slate-800/90 p-2.5 sm:p-3.5 clip-chamfer space-y-2">
+          <label className="text-[10px] sm:text-[11px] font-mono font-bold text-slate-300 uppercase tracking-widest flex items-center gap-1.5">
+            <Palette className="w-3.5 h-3.5 text-cyan-400 shrink-0" /> Suit Armor Colorway
+          </label>
+          <div className="flex items-center gap-2 flex-wrap">
+            {SUIT_SWATCHES.map((color) => (
+              <button
+                key={color}
+                type="button"
+                onClick={() => {
+                  sounds.playUiClick();
+                  setAvatar({ bodyColor: color });
+                }}
+                style={{ backgroundColor: color }}
+                className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 transition-transform cursor-pointer ${
+                  avatar.bodyColor.toLowerCase() === color.toLowerCase()
+                    ? 'border-white scale-115 shadow-lg shadow-cyan-500/40'
+                    : 'border-transparent opacity-80 hover:opacity-100 hover:scale-105'
+                }`}
+                aria-label={`Suit color ${color}`}
+              />
+            ))}
+            <label
+              className="flex items-center gap-1.5 px-2 py-1 bg-slate-900 border border-slate-700 hover:border-cyan-400 rounded-full text-[10px] font-mono text-slate-300 cursor-pointer"
+              title="Custom Armor Color"
+            >
+              <input
+                type="color"
+                value={avatar.bodyColor}
+                onChange={(e) => setAvatar({ bodyColor: e.target.value })}
+                className="w-4 h-4 bg-transparent border-0 cursor-pointer p-0"
+              />
+              <span>Custom</span>
+            </label>
+          </div>
+        </div>
+
         {/* Visor & Jetpack */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="text-[11px] font-mono font-bold text-slate-300 uppercase tracking-widest block mb-2 flex items-center gap-1.5">
-              <Eye className="w-3.5 h-3.5 text-cyan-400" /> Optics & Visor
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="bg-slate-950/55 border border-slate-800/90 p-2.5 sm:p-3.5 clip-chamfer space-y-2">
+            <label className="text-[10px] sm:text-[11px] font-mono font-bold text-slate-300 uppercase tracking-widest flex items-center gap-1.5">
+              <Eye className="w-3.5 h-3.5 text-cyan-400 shrink-0" /> Optics &amp; Visor
             </label>
             <div className="grid grid-cols-2 gap-1.5">
               {VISORS.map((v) => (
@@ -402,7 +394,7 @@ export function PilotAvatarTab() {
                     sounds.playUiClick();
                     setAvatar({ visorStyle: v.id });
                   }}
-                  className={`px-2 sm:px-2.5 py-2 text-[11px] sm:text-xs font-medium border transition text-left cursor-pointer clip-chamfer ${
+                  className={`px-2 py-1.5 text-[10.5px] sm:text-xs font-medium border transition text-left cursor-pointer clip-chamfer ${
                     avatar.visorStyle === v.id
                       ? 'bg-cyan-500/25 border-cyan-400 text-white font-bold'
                       : 'bg-slate-950/70 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
@@ -414,9 +406,9 @@ export function PilotAvatarTab() {
             </div>
           </div>
 
-          <div>
-            <label className="text-[11px] font-mono font-bold text-slate-300 uppercase tracking-widest block mb-2 flex items-center gap-1.5">
-              <Flame className="w-3.5 h-3.5 text-amber-400" /> Jetpack Thrusters
+          <div className="bg-slate-950/55 border border-slate-800/90 p-2.5 sm:p-3.5 clip-chamfer space-y-2">
+            <label className="text-[10px] sm:text-[11px] font-mono font-bold text-slate-300 uppercase tracking-widest flex items-center gap-1.5">
+              <Flame className="w-3.5 h-3.5 text-amber-400 shrink-0" /> Jetpack Thrusters
             </label>
             <div className="flex flex-col gap-1.5">
               {JETPACKS.map((j) => (
@@ -427,7 +419,7 @@ export function PilotAvatarTab() {
                     sounds.playUiClick();
                     setAvatar({ jetpackStyle: j.id });
                   }}
-                  className={`px-3 py-2 text-xs font-medium border transition text-left cursor-pointer clip-chamfer ${
+                  className={`px-2.5 py-1.5 text-[10.5px] sm:text-xs font-medium border transition text-left cursor-pointer clip-chamfer ${
                     avatar.jetpackStyle === j.id
                       ? 'bg-amber-500/20 border-amber-400 text-white font-bold'
                       : 'bg-slate-950/70 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
@@ -440,27 +432,56 @@ export function PilotAvatarTab() {
           </div>
         </div>
 
-        {/* Faceplate / Skin Tone */}
-        <div className="flex items-center gap-2.5 flex-wrap pt-1 border-t border-slate-800/80">
-          <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">
-            Faceplate Tone:
-          </span>
-          {SKIN_SWATCHES.map((tone) => (
-            <button
-              key={tone}
-              type="button"
-              onClick={() => {
-                sounds.playUiClick();
-                setAvatar({ skinTone: tone });
-              }}
-              style={{ backgroundColor: tone }}
-              className={`w-5 h-5 rounded-full border transition cursor-pointer ${
-                avatar.skinTone === tone
-                  ? 'border-white scale-120'
-                  : 'border-slate-700 opacity-80 hover:opacity-100'
-              }`}
-            />
-          ))}
+        {/* Starting Weapon Preview + Faceplate Tone */}
+        <div className="bg-slate-950/55 border border-slate-800/90 p-2.5 sm:p-3.5 clip-chamfer space-y-2.5">
+          <label className="text-[10px] sm:text-[11px] font-mono font-bold text-slate-300 uppercase tracking-widest flex items-center gap-1.5">
+            <Crosshair className="w-3.5 h-3.5 text-cyan-400 shrink-0" /> Default Starting Weapon
+          </label>
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+            {WEAPON_OPTIONS.map((wId) => {
+              const active = defaultWeapon === wId;
+              return (
+                <button
+                  key={wId}
+                  type="button"
+                  onClick={() => {
+                    sounds.playWeaponSound(wId);
+                    updateSettings({ defaultWeapon: wId });
+                  }}
+                  className={`px-1.5 py-1.5 text-[10px] sm:text-[11px] font-mono font-bold uppercase border clip-chamfer cursor-pointer transition ${
+                    active
+                      ? 'bg-cyan-500/25 border-cyan-400 text-white'
+                      : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {WEAPONS[wId].name.split(' ').pop()}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-slate-800/80">
+            <span className="text-[9.5px] font-mono font-bold text-slate-400 uppercase tracking-wider">
+              Faceplate Tone:
+            </span>
+            {SKIN_SWATCHES.map((tone) => (
+              <button
+                key={tone}
+                type="button"
+                onClick={() => {
+                  sounds.playUiClick();
+                  setAvatar({ skinTone: tone });
+                }}
+                style={{ backgroundColor: tone }}
+                className={`w-5 h-5 rounded-full border transition cursor-pointer ${
+                  avatar.skinTone === tone
+                    ? 'border-white scale-115'
+                    : 'border-slate-700 opacity-80 hover:opacity-100'
+                }`}
+                aria-label={`Faceplate tone ${tone}`}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </div>

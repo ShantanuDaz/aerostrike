@@ -21,6 +21,7 @@ interface PendingStationClaim {
   prevBoostFuel: number;
   prevOverheated: boolean;
   prevDashCooldown: number;
+  prevGrenades?: number;
 }
 
 const pendingPickupClaims = new Map<string, PendingPickupClaim>();
@@ -101,6 +102,7 @@ export function recordOptimisticStationClaim(
   prevOverheated: boolean,
   prevDashCooldown: number,
   nowMs: number = performance.now(),
+  prevGrenades?: number,
 ) {
   pendingStationClaims.set(stationId, {
     claimedAtMs: nowMs,
@@ -109,6 +111,7 @@ export function recordOptimisticStationClaim(
     prevBoostFuel,
     prevOverheated,
     prevDashCooldown,
+    prevGrenades,
   });
 }
 
@@ -137,6 +140,17 @@ export function handleAuthoritativeStationTaken(
     nextPlayer.boostFuel = Math.min(nextPlayer.boostFuel, pending.prevBoostFuel);
     nextPlayer.fuelOverheated = pending.prevOverheated;
     nextPlayer.dashCooldown = Math.max(nextPlayer.dashCooldown ?? 0, pending.prevDashCooldown);
+  }
+  if (pending.stationType === 'supply' && pending.prevGrenades !== undefined) {
+    const combat = useCombatStore.getState();
+    const revertedGrenades = Math.min(combat.grenades, pending.prevGrenades);
+    useCombatStore.setState({
+      grenades: revertedGrenades,
+      ammoByWeapon: {
+        ...combat.ammoByWeapon,
+        grenade: revertedGrenades,
+      },
+    });
   }
 
   usePlayerStore.getState().setPlayer(nextPlayer);

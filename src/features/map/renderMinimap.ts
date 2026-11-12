@@ -155,18 +155,24 @@ export function renderMinimap(
     ctx.restore();
   }
 
-  // 4. Draw Camera Frustum (Zoom-aware Viewport Box)
+  // 4. Draw Camera Frustum (Zoom-aware Viewport Box, clipped neatly to arena bounds)
   const { worldViewWidth, worldViewHeight } = getWorldViewportSize(camera);
-  ctx.save();
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(
-    camera.x * scaleX,
-    camera.y * scaleY,
-    worldViewWidth * scaleX,
-    worldViewHeight * scaleY,
-  );
-  ctx.restore();
+  const frustumLeft = Math.max(0, camera.x * scaleX);
+  const frustumTop = Math.max(0, camera.y * scaleY);
+  const frustumRight = Math.min(width, (camera.x + worldViewWidth) * scaleX);
+  const frustumBottom = Math.min(height, (camera.y + worldViewHeight) * scaleY);
+  if (frustumRight > frustumLeft && frustumBottom > frustumTop) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(
+      frustumLeft,
+      frustumTop,
+      frustumRight - frustumLeft,
+      frustumBottom - frustumTop,
+    );
+    ctx.restore();
+  }
 
   // 5. Draw Player Blips
   for (const p of players) {

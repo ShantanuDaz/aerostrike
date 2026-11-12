@@ -562,7 +562,7 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
       }
     }
 
-    const { activeBullets, newParticles, hits } = updateBullets(
+    const { activeBullets, newParticles, explosions, hits } = updateBullets(
       engineWorld.bullets,
       map,
       simState.targetPlayersBuf,
@@ -571,6 +571,22 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
 
     for (let i = 0; i < newParticles.length; i++) {
       engineWorld.particles.push(newParticles[i]);
+    }
+    if (explosions.length > 0) {
+      const shakeEnabled = useSettingsStore.getState().screenShake;
+      for (let i = 0; i < explosions.length; i++) {
+        const exp = explosions[i];
+        engineWorld.addBlastEffect(exp);
+        if (shakeEnabled) {
+          const dist = Math.hypot(exp.x - nextPlayer.x, exp.y - nextPlayer.y);
+          const proximity = Math.max(0.15, 1 - dist / 950);
+          const peakShake = exp.weaponType === 'grenade' ? 18 : 14;
+          screenShakeRef.current = Math.min(
+            20,
+            Math.max(screenShakeRef.current, peakShake * proximity),
+          );
+        }
+      }
     }
     engineWorld.bullets = activeBullets;
 
@@ -774,10 +790,13 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
           postCtfLocal.boostFuel < postCtfLocal.maxFuel - 1 ||
           Boolean(postCtfLocal.fuelOverheated) ||
           (postCtfLocal.dashCooldown ?? 0) > 0.2;
+        const combatNow = useCombatStore.getState();
+        const needsGrenades = combatNow.grenades < combatNow.maxGrenades;
 
         const prevFuel = postCtfLocal.boostFuel;
         const prevOverheated = Boolean(postCtfLocal.fuelOverheated);
         const prevDashCd = postCtfLocal.dashCooldown ?? 0;
+        const prevGrenades = combatNow.grenades;
 
         if (st.stationType === 'medkit' && needsHealth) {
           const healed = Math.min(postCtfLocal.maxHealth, postCtfLocal.health + 55);
@@ -826,7 +845,7 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
             networkManager.broadcastStationCollected(st.id, st.stationType);
           }
           networkManager.notifyLocalStateChanged();
-        } else if (st.stationType === 'supply' && (needsHealth || needsFuel)) {
+        } else if (st.stationType === 'supply' && (needsHealth || needsFuel || needsGrenades)) {
           const healed = Math.min(postCtfLocal.maxHealth, postCtfLocal.health + 40);
           const actualGain = healed - postCtfLocal.health;
           if (shouldRecordOptimistic) {
@@ -837,17 +856,26 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
               prevFuel,
               prevOverheated,
               prevDashCd,
+              timestamp,
+              prevGrenades,
             );
           }
           postCtfLocal.health = healed;
           postCtfLocal.boostFuel = postCtfLocal.maxFuel;
           postCtfLocal.fuelOverheated = false;
           postCtfLocal.dashCooldown = 0;
+          combatNow.refillGrenades();
           st.respawnTimer = st.cooldownSec;
           sounds.playRefill('supply');
           hapticPickup();
           engineWorld.addParticles(createSparks(st.x, st.y, 14, '#c084fc'));
-          engineWorld.addFloatingText(st.x, st.y - 16, 'RESUPPLY', '#c084fc', 1.05);
+          engineWorld.addFloatingText(
+            st.x,
+            st.y - 16,
+            needsGrenades ? 'RESUPPLY +GRN' : 'RESUPPLY',
+            '#c084fc',
+            1.05,
+          );
           if (isMultiplayer) {
             networkManager.broadcastStationCollected(st.id, st.stationType);
           }

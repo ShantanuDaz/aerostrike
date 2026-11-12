@@ -7,6 +7,7 @@ import {
   STICK_HIT_RADIUS,
   evaluateAimStick,
   evaluateMoveStick,
+  getScaledStickMetrics,
   pickFixedStickTarget,
 } from './touchStickMath';
 
@@ -105,6 +106,40 @@ describe('touchStickMath', () => {
       const narrowAim = { x: 225, y: 500 };
       expect(pickFixedStickTarget(120, 500, narrowMove, narrowAim, false, false)).toBe('move');
       expect(pickFixedStickTarget(190, 500, narrowMove, narrowAim, false, false)).toBe('aim');
+    });
+  });
+
+  describe('scaled stick metrics and instant fire mode', () => {
+    it('scales pads, knobs, travel bounds, and hit radius proportionally', () => {
+      const compact = getScaledStickMetrics(0.75, 5);
+      expect(compact.movePadSize).toBe(90);
+      expect(compact.aimPadSize).toBe(93);
+      expect(compact.stickHitRadius).toBe(78);
+
+      const moveRes = evaluateMoveStick(0, -compact.moveMaxDist, compact.moveMaxDist);
+      expect(moveRes.boosting).toBe(true);
+      expect(moveRes.offsetY).toBeCloseTo(-compact.moveMaxDist, 5);
+    });
+
+    it('fires immediately past deadzone in instant aim mode', () => {
+      const metrics = getScaledStickMetrics(0.85, 6);
+      const insideDeadzone = evaluateAimStick(4, 0, {
+        maxDist: metrics.aimMaxDist,
+        deadzoneDist: metrics.aimDeadzoneDist,
+        firePerimeterDist: metrics.aimFirePerimeterDist,
+        aimMode: 'instant',
+      });
+      expect(insideDeadzone.hasAim).toBe(false);
+      expect(insideDeadzone.isFiring).toBe(false);
+
+      const midStick = evaluateAimStick(14, 0, {
+        maxDist: metrics.aimMaxDist,
+        deadzoneDist: metrics.aimDeadzoneDist,
+        firePerimeterDist: metrics.aimFirePerimeterDist,
+        aimMode: 'instant',
+      });
+      expect(midStick.hasAim).toBe(true);
+      expect(midStick.isFiring).toBe(true);
     });
   });
 });

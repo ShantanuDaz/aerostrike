@@ -153,7 +153,7 @@ export function validateIncomingDamage(ctx: DamageValidationContext): boolean {
 
   const weaponCfg = WEAPONS[evt.weaponType];
   const maxSingleHit =
-    evt.weaponType === 'rocket'
+    evt.weaponType === 'rocket' || evt.weaponType === 'grenade'
       ? Math.round(weaponCfg.damage) + 2
       : Math.round(weaponCfg.damage * 1.3) + 2;
 

@@ -59,4 +59,27 @@ describe('cameraMath zoom and transforms', () => {
     expect(updated.x).toBeCloseTo((1800 - 2000) / 2, 5);
     expect(updated.y).toBeCloseTo((1000 - 800 / 0.6) / 2, 5);
   });
+
+  it('overscans past arena edges so players near red/blue flags stay centered away from mobile HUD/controls', () => {
+    // iPhone SE landscape (667x375) at 0.55x zoom on Canyon Outpost (3200x1800)
+    const cam = createCamera(667, 375, 0.55);
+    const { worldViewWidth } = getWorldViewportSize(cam);
+
+    // Player at Red Flag (x=2920, y=1320) should be centered in viewport
+    const atRedFlag = updateCamera(cam, 2920, 1320, 3200, 1800, 1);
+    const redScreen = worldToScreen(2920, 1320, atRedFlag);
+    expect(redScreen.screenX).toBeCloseTo(667 / 2, 1);
+    expect(atRedFlag.x + worldViewWidth).toBeGreaterThan(3200);
+
+    // Player at Blue Flag (x=280, y=1320) should also be centered in viewport
+    const atBlueFlag = updateCamera(cam, 280, 1320, 3200, 1800, 1);
+    const blueScreen = worldToScreen(280, 1320, atBlueFlag);
+    expect(blueScreen.screenX).toBeCloseTo(667 / 2, 1);
+    expect(atBlueFlag.x).toBeLessThan(0);
+
+    // Even right against the far right wall (x=3160), overscan is bounded
+    const atRightWall = updateCamera(cam, 3160, 1320, 3200, 1800, 1);
+    const wallScreen = worldToScreen(3160, 1320, atRightWall);
+    expect(wallScreen.screenX).toBeLessThan(480);
+  });
 });

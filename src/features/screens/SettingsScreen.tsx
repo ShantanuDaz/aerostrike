@@ -23,9 +23,9 @@ interface SettingsScreenProps {
 
 const TABS: { id: SettingsTab; label: string; icon: typeof User }[] = [
   { id: 'avatar', label: 'Pilot & Suit', icon: User },
-  { id: 'audio', label: 'Audio & SFX', icon: Headphones },
+  { id: 'controls', label: 'Controls', icon: Gamepad2 },
   { id: 'display', label: 'Display & HUD', icon: Monitor },
-  { id: 'controls', label: 'Controls & Intel', icon: Gamepad2 },
+  { id: 'audio', label: 'Audio & SFX', icon: Headphones },
 ];
 
 export function SettingsScreen({ initialTab = 'avatar', onBack }: SettingsScreenProps) {
@@ -64,13 +64,13 @@ export function SettingsScreen({ initialTab = 'avatar', onBack }: SettingsScreen
   };
 
   return (
-    <div className="min-h-[100dvh] w-full safe-insets cyber-grid-bg text-slate-100 flex flex-col relative overflow-y-auto cyber-scroll select-none">
+    <div className="h-[100dvh] w-full safe-insets cyber-grid-bg text-slate-100 flex flex-col relative overflow-hidden select-none">
       {crtScanlines && (
         <div className="fixed inset-0 scanline-overlay z-10 pointer-events-none" />
       )}
 
       {/* Top Header */}
-      <header className="relative z-20 w-full max-w-6xl mx-auto px-3 sm:px-4 pt-3 sm:tall:pt-6 pb-2.5 sm:tall:pb-3 flex items-center justify-between gap-2 sm:gap-3 border-b border-cyan-500/20">
+      <header className="relative z-20 shrink-0 w-full max-w-6xl mx-auto px-2.5 sm:px-4 py-1.5 sm:tall:pt-4 sm:tall:pb-2.5 flex items-center justify-between gap-2 border-b border-cyan-500/20">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button
             type="button"
@@ -78,32 +78,32 @@ export function SettingsScreen({ initialTab = 'avatar', onBack }: SettingsScreen
               sounds.playUiClick();
               onBack();
             }}
-            className="shrink-0 flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-2 bg-slate-950/90 hover:bg-slate-900 border border-cyan-500/40 hover:border-cyan-400 text-cyan-200 hover:text-white text-xs font-mono font-bold uppercase tracking-wider clip-chamfer transition cursor-pointer"
+            className="shrink-0 flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-slate-950/90 hover:bg-slate-900 border border-cyan-500/40 hover:border-cyan-400 text-cyan-200 hover:text-white text-[11px] sm:text-xs font-mono font-bold uppercase tracking-wider clip-chamfer transition cursor-pointer"
           >
-            <ArrowLeft className="w-4 h-4 text-cyan-400 shrink-0" />
-            <span className="hidden xs:inline">Back to Hangar</span>
-            <span className="xs:hidden">Back</span>
+            <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400 shrink-0" />
+            <span className="hidden sm:inline">Back to Hangar</span>
+            <span className="sm:hidden">Back</span>
           </button>
 
           <div className="min-w-0">
-            <span className="text-[9px] sm:text-[10px] font-mono text-cyan-400/80 uppercase tracking-widest block truncate">
+            <span className="hidden sm:tall:block text-[9px] font-mono text-cyan-400/80 uppercase tracking-widest truncate">
               // SYSTEM CONFIGURATION //
             </span>
-            <h1 className="text-base sm:text-xl font-black italic tracking-wider text-white uppercase truncate">
+            <h1 className="text-sm sm:text-lg font-black italic tracking-wider text-white uppercase truncate">
               Settings &amp; Armory
             </h1>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-[10px] font-mono font-bold uppercase tracking-wider clip-chamfer">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <span className="hidden md:inline-flex items-center gap-1 px-2 py-1 bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-[10px] font-mono font-bold uppercase tracking-wider clip-chamfer">
             <Check className="w-3 h-3" /> Auto-Saved
           </span>
           <button
             type="button"
             onClick={handleResetAllSettings}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-slate-950/80 hover:bg-rose-950/60 border border-slate-700 hover:border-rose-500/50 text-slate-300 hover:text-rose-200 text-xs font-mono font-bold uppercase tracking-wider clip-chamfer transition cursor-pointer"
-            title="Reset Audio, Display & Loadout Settings"
+            className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 bg-slate-950/80 hover:bg-rose-950/60 border border-slate-700 hover:border-rose-500/50 text-slate-300 hover:text-rose-200 text-[11px] sm:text-xs font-mono font-bold uppercase tracking-wider clip-chamfer transition cursor-pointer"
+            title="Reset Audio, Display, Controls & Loadout Settings"
             aria-label="Reset Defaults"
           >
             <RotateCcw className="w-3.5 h-3.5 shrink-0" />
@@ -112,9 +112,9 @@ export function SettingsScreen({ initialTab = 'avatar', onBack }: SettingsScreen
         </div>
       </header>
 
-      {/* Main Content Layout: Left Navigation Tabs + Right Settings Panel */}
-      <main className="relative z-20 flex-1 w-full max-w-6xl mx-auto px-3 sm:px-4 py-3.5 sm:tall:py-5 flex flex-col lg:flex-row gap-3.5 sm:gap-5">
-        <nav className="w-full lg:w-60 shrink-0 grid grid-cols-2 sm:grid-cols-4 lg:flex lg:flex-col gap-1.5 sm:gap-2">
+      {/* Main Content Layout: Compact Top Tabs on Mobile/Landscape, Sidebar on XL + Split-Pane Panel */}
+      <main className="relative z-20 flex-1 min-h-0 w-full max-w-6xl mx-auto px-2 sm:px-4 py-1.5 sm:tall:py-3.5 flex flex-col xl:flex-row gap-2 sm:gap-4 overflow-hidden">
+        <nav className="shrink-0 w-full xl:w-52 grid grid-cols-4 xl:flex xl:flex-col gap-1 sm:gap-2">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -130,20 +130,20 @@ export function SettingsScreen({ initialTab = 'avatar', onBack }: SettingsScreen
                   }
                   setActiveTab(tab.id);
                 }}
-                className={`flex items-center gap-2 sm:gap-2.5 px-2.5 sm:px-4 py-2.5 sm:tall:py-3 text-left text-[11px] sm:text-xs font-mono font-bold uppercase tracking-wider clip-chamfer border transition cursor-pointer ${
+                className={`flex items-center justify-center xl:justify-start gap-1.5 sm:gap-2 px-1.5 sm:px-3.5 py-1.5 sm:py-2.5 text-[10px] sm:text-xs font-mono font-bold uppercase tracking-wider clip-chamfer border transition cursor-pointer ${
                   active
                     ? 'bg-cyan-500/20 border-cyan-400 text-white glow-cyan'
                     : 'bg-slate-950/75 border-slate-800 text-slate-400 hover:text-white hover:border-slate-600'
                 }`}
               >
-                <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-cyan-300' : 'text-slate-500'}`} />
+                <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${active ? 'text-cyan-300' : 'text-slate-500'}`} />
                 <span className="truncate">{tab.label}</span>
               </button>
             );
           })}
         </nav>
 
-        <section className="flex-1 cyber-panel clip-chamfer-lg p-3.5 sm:p-6 border border-cyan-500/30 min-w-0">
+        <section className="flex-1 min-h-0 min-w-0 cyber-panel clip-chamfer-lg p-2 sm:p-4 border border-cyan-500/30 flex flex-col overflow-hidden">
           {activeTab === 'avatar' && <PilotAvatarTab />}
           {activeTab === 'audio' && (
             <AudioSettingsTab

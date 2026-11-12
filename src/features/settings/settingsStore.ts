@@ -12,6 +12,41 @@ export type HudScale = 'compact' | 'standard' | 'large';
 export type TouchAimMode = 'instant' | 'precision';
 export type TouchLayout = 'right_handed' | 'left_handed';
 
+export const MIN_TOUCH_CONTROL_SCALE = 0.65;
+export const MAX_TOUCH_CONTROL_SCALE = 1.25;
+export const DEFAULT_TOUCH_CONTROL_SCALE = 0.85;
+
+export const MIN_TOUCH_CONTROL_OPACITY = 0.4;
+export const MAX_TOUCH_CONTROL_OPACITY = 1.0;
+export const DEFAULT_TOUCH_CONTROL_OPACITY = 0.9;
+
+export const MIN_TOUCH_DEADZONE = 3;
+export const MAX_TOUCH_DEADZONE = 14;
+export const DEFAULT_TOUCH_DEADZONE = 6;
+
+export function clampTouchControlScale(scale: number): number {
+  if (!Number.isFinite(scale) || scale <= 0) {
+    return DEFAULT_TOUCH_CONTROL_SCALE;
+  }
+  const clamped = Math.max(MIN_TOUCH_CONTROL_SCALE, Math.min(MAX_TOUCH_CONTROL_SCALE, scale));
+  return Math.round(clamped * 100) / 100;
+}
+
+export function clampTouchControlOpacity(opacity: number): number {
+  if (!Number.isFinite(opacity) || opacity <= 0) {
+    return DEFAULT_TOUCH_CONTROL_OPACITY;
+  }
+  const clamped = Math.max(MIN_TOUCH_CONTROL_OPACITY, Math.min(MAX_TOUCH_CONTROL_OPACITY, opacity));
+  return Math.round(clamped * 100) / 100;
+}
+
+export function clampTouchDeadzone(deadzone: number): number {
+  if (!Number.isFinite(deadzone) || deadzone <= 0) {
+    return DEFAULT_TOUCH_DEADZONE;
+  }
+  return Math.round(Math.max(MIN_TOUCH_DEADZONE, Math.min(MAX_TOUCH_DEADZONE, deadzone)));
+}
+
 export interface GameSettings {
   masterVolume: number;
   sfxMuted: boolean;
@@ -33,7 +68,10 @@ export interface GameSettings {
   touchLayout: TouchLayout;
   touchAimLine: boolean;
   hapticsEnabled: boolean;
-  showTouchBoostButton: boolean;
+  showTouchGrenadeButton: boolean;
+  touchControlScale: number;
+  touchControlOpacity: number;
+  touchStickDeadzone: number;
 }
 
 const SETTINGS_STORAGE_KEY = 'aerostrike_settings_v1';
@@ -59,7 +97,10 @@ export const DEFAULT_SETTINGS: GameSettings = {
   touchLayout: 'right_handed',
   touchAimLine: true,
   hapticsEnabled: true,
-  showTouchBoostButton: false,
+  showTouchGrenadeButton: true,
+  touchControlScale: DEFAULT_TOUCH_CONTROL_SCALE,
+  touchControlOpacity: DEFAULT_TOUCH_CONTROL_OPACITY,
+  touchStickDeadzone: DEFAULT_TOUCH_DEADZONE,
 };
 
 const VALID_RADAR_MODES: DefaultRadarMode[] = ['compact', 'expanded', 'hidden'];
@@ -149,10 +190,22 @@ function loadStoredSettings(): GameSettings {
         typeof parsed.hapticsEnabled === 'boolean'
           ? parsed.hapticsEnabled
           : DEFAULT_SETTINGS.hapticsEnabled,
-      showTouchBoostButton:
-        typeof parsed.showTouchBoostButton === 'boolean'
-          ? parsed.showTouchBoostButton
-          : DEFAULT_SETTINGS.showTouchBoostButton,
+      showTouchGrenadeButton:
+        typeof parsed.showTouchGrenadeButton === 'boolean'
+          ? parsed.showTouchGrenadeButton
+          : DEFAULT_SETTINGS.showTouchGrenadeButton,
+      touchControlScale:
+        typeof parsed.touchControlScale === 'number'
+          ? clampTouchControlScale(parsed.touchControlScale)
+          : DEFAULT_SETTINGS.touchControlScale,
+      touchControlOpacity:
+        typeof parsed.touchControlOpacity === 'number'
+          ? clampTouchControlOpacity(parsed.touchControlOpacity)
+          : DEFAULT_SETTINGS.touchControlOpacity,
+      touchStickDeadzone:
+        typeof parsed.touchStickDeadzone === 'number'
+          ? clampTouchDeadzone(parsed.touchStickDeadzone)
+          : DEFAULT_SETTINGS.touchStickDeadzone,
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -228,7 +281,20 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         touchLayout: patch.touchLayout ?? state.touchLayout,
         touchAimLine: patch.touchAimLine ?? state.touchAimLine,
         hapticsEnabled: patch.hapticsEnabled ?? state.hapticsEnabled,
-        showTouchBoostButton: patch.showTouchBoostButton ?? state.showTouchBoostButton,
+        showTouchGrenadeButton:
+          patch.showTouchGrenadeButton ?? state.showTouchGrenadeButton,
+        touchControlScale:
+          patch.touchControlScale !== undefined
+            ? clampTouchControlScale(patch.touchControlScale)
+            : state.touchControlScale,
+        touchControlOpacity:
+          patch.touchControlOpacity !== undefined
+            ? clampTouchControlOpacity(patch.touchControlOpacity)
+            : state.touchControlOpacity,
+        touchStickDeadzone:
+          patch.touchStickDeadzone !== undefined
+            ? clampTouchDeadzone(patch.touchStickDeadzone)
+            : state.touchStickDeadzone,
       };
       persistSettings(next);
       return next;

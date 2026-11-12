@@ -4,6 +4,13 @@ export const MIN_CAMERA_ZOOM = 0.55;
 export const MAX_CAMERA_ZOOM = 1.35;
 export const DEFAULT_CAMERA_ZOOM = 1.0;
 export const CAMERA_ZOOM_STEP = 0.1;
+export const CAMERA_EDGE_OVERSCAN_X_RATIO = 0.28;
+export const CAMERA_EDGE_OVERSCAN_Y_RATIO = 0.16;
+
+export interface CameraOverscanOptions {
+  overscanX?: number;
+  overscanY?: number;
+}
 
 export function clampCameraZoom(zoom: number): number {
   if (!Number.isFinite(zoom) || zoom <= 0) {
@@ -64,18 +71,25 @@ export function createCamera(
   };
 }
 
-function clampAxisOffset(value: number, mapSize: number, worldViewSize: number): number {
+function clampAxisOffset(
+  value: number,
+  mapSize: number,
+  worldViewSize: number,
+  overscan: number = 0,
+): number {
   const maxOffset = mapSize - worldViewSize;
   if (maxOffset <= 0) {
     // When zoomed out wider than the arena, center the arena cleanly in the viewport
     return maxOffset / 2;
   }
-  return Math.max(0, Math.min(value, maxOffset));
+  const safeOverscan = Math.max(0, overscan);
+  return Math.max(-safeOverscan, Math.min(value, maxOffset + safeOverscan));
 }
 
 /**
  * Smoothly interpolates the camera to center on the target point (player),
- * clamped to the map boundaries (or centered when zoomed wider than the map).
+ * allowing generous edge overscan beyond the map walls so players near flags
+ * and arena corners stay clearly visible away from side HUD/touch controls.
  */
 export function updateCamera(
   camera: Camera,
@@ -84,8 +98,17 @@ export function updateCamera(
   mapWidth: number,
   mapHeight: number,
   lerpFactor: number = 0.12,
+  options?: CameraOverscanOptions,
 ): Camera {
   const { worldViewWidth, worldViewHeight } = getWorldViewportSize(camera);
+  const overscanX =
+    options?.overscanX !== undefined
+      ? options.overscanX
+      : worldViewWidth * CAMERA_EDGE_OVERSCAN_X_RATIO;
+  const overscanY =
+    options?.overscanY !== undefined
+      ? options.overscanY
+      : worldViewHeight * CAMERA_EDGE_OVERSCAN_Y_RATIO;
 
   // Desired top-left world position to center target in viewport
   const idealX = targetX - worldViewWidth / 2;
@@ -97,8 +120,8 @@ export function updateCamera(
 
   return {
     ...camera,
-    x: clampAxisOffset(lerpedX, mapWidth, worldViewWidth),
-    y: clampAxisOffset(lerpedY, mapHeight, worldViewHeight),
+    x: clampAxisOffset(lerpedX, mapWidth, worldViewWidth, overscanX),
+    y: clampAxisOffset(lerpedY, mapHeight, worldViewHeight, overscanY),
   };
 }
 

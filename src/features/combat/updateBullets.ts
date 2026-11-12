@@ -1,6 +1,7 @@
-import type { Bullet, Particle, WeaponType } from './types';
+import type { Bullet, ExplosionEvent, Particle, WeaponType } from './types';
 import type { GameMap } from '../map/types';
 import { raycastMapTerrain } from '../map/terrainGeometry';
+import { GRENADE_GRAVITY } from './weaponsConfig';
 import {
   createDirectionalSparks,
   createExplosionParticles,
@@ -11,6 +12,7 @@ import { sounds } from '../audio/soundEngine';
 export interface BulletCollisionResult {
   activeBullets: Bullet[];
   newParticles: Particle[];
+  explosions: ExplosionEvent[];
   hits: {
     targetId: string;
     damage: number;
@@ -233,6 +235,63 @@ function closestSegmentPair(
 }
 
 /**
+ * Emits explosion SFX, particles, and radial splash hits for rockets & frag grenades.
+ */
+function detonateExplosive(
+  bullet: Bullet,
+  impactX: number,
+  impactY: number,
+  players: TargetPlayer[],
+  newParticles: Particle[],
+  explosions: ExplosionEvent[],
+  hits: BulletCollisionResult['hits'],
+): void {
+  sounds.playExplosion();
+  const isFrag = bullet.weaponType === 'grenade';
+  const particleCount = isFrag ? 48 : 38;
+  newParticles.push(
+    ...createExplosionParticles(
+      impactX,
+      impactY,
+      particleCount,
+      isFrag ? '#a3e635' : '#fb923c',
+    ),
+  );
+  explosions.push({
+    x: impactX,
+    y: impactY,
+    radius: bullet.blastRadius,
+    weaponType: bullet.weaponType,
+  });
+
+  for (const p of players) {
+    if (p.isDead || p.isInvulnerable) continue;
+    if (bullet.team && p.team && bullet.team === p.team && p.id !== bullet.shooterId) {
+      continue;
+    }
+
+    const dist = Math.hypot(p.x - impactX, p.y - impactY);
+    if (dist <= bullet.blastRadius) {
+      const falloff = 1 - dist / bullet.blastRadius;
+      const splashDmg = Math.round(bullet.damage * falloff);
+      const angle = Math.atan2(p.y - impactY, p.x - impactX);
+
+      hits.push({
+        targetId: p.id,
+        damage: splashDmg,
+        dealerId: bullet.shooterId,
+        weaponType: bullet.weaponType,
+        isCrit: falloff >= 0.85,
+        impactX: p.x,
+        impactY: p.y - 12,
+        knockbackX: Math.cos(angle) * (9.5 * falloff),
+        knockbackY: Math.sin(angle) * (9.5 * falloff) - 2.6,
+      });
+    }
+  }
+}
+
+/**
  * Updates bullets for one frame with swept segment-to-humanoid collision
  * so bullets never tunnel and match the articulated soldier hitbox cleanly.
  */
@@ -247,13 +306,23 @@ export function updateBullets(
 
   const activeBullets: Bullet[] = [];
   const newParticles: Particle[] = [];
+  const explosions: ExplosionEvent[] = [];
   const hits: BulletCollisionResult['hits'] = [];
 
   for (const bullet of bullets) {
+    const isGrenade = bullet.weaponType === 'grenade';
     const startX = bullet.x;
     const startY = bullet.y;
-    const endX = startX + bullet.vx * dtScale;
-    const endY = startY + bullet.vy * dtScale;
+
+    let stepVx = bullet.vx;
+    let stepVy = bullet.vy;
+    if (isGrenade) {
+      stepVx *= Math.pow(0.996, dtScale);
+      stepVy += GRENADE_GRAVITY * dtScale;
+    }
+
+    const endX = startX + stepVx * dtScale;
+    const endY = startY + stepVy * dtScale;
 
     // 1. Earliest solid terrain/obstacle hit along bullet path (ignore platforms and hazards)
     const terrainHit = raycastMapTerrain(startX, startY, endX, endY, map);
@@ -316,6 +385,70 @@ export function updateBullets(
       hitPlayer = null;
     }
 
+    // Grenade special physics: direct enemy impact detonates immediately, terrain bounces until fuse expires
+    if (isGrenade) {
+      if (hitPlayer) {
+        const impactX = startX + (endX - startX) * earliestPlayerT;
+        const impactY = startY + (endY - startY) * earliestPlayerT;
+        detonateExplosive(bullet, impactX, impactY, players, newParticles, explosions, hits);
+        continue;
+      }
+
+      if (terrainHit) {
+        const { nx, ny, hitX, hitY } = terrainHit;
+        const dot = stepVx * nx + stepVy * ny;
+        let bouncedVx = stepVx;
+        let bouncedVy = stepVy;
+        if (dot < 0) {
+          const tx = stepVx - dot * nx;
+          const ty = stepVy - dot * ny;
+          const restitution = 0.54;
+          const tangentialDamp = 0.8;
+          bouncedVx = tx * tangentialDamp - dot * nx * restitution;
+          bouncedVy = ty * tangentialDamp - dot * ny * restitution;
+          if (ny < -0.5 && Math.abs(bouncedVy) < 1.1) {
+            bouncedVy = 0;
+          }
+        }
+
+        const speedBefore = Math.hypot(stepVx, stepVy);
+        if (speedBefore > 2.5) {
+          sounds.playGrenadeBounce();
+          newParticles.push(...createDirectionalSparks(hitX, hitY, nx, ny, 3, '#a3e635'));
+        }
+
+        bullet.x = hitX + nx * 2.5;
+        bullet.y = hitY + ny * 2.5;
+        bullet.vx = bouncedVx;
+        bullet.vy = bouncedVy;
+        bullet.lifespan -= dtScale;
+
+        if (bullet.lifespan <= 0) {
+          detonateExplosive(bullet, bullet.x, bullet.y, players, newParticles, explosions, hits);
+        } else {
+          activeBullets.push(bullet);
+        }
+        continue;
+      }
+
+      bullet.x = endX;
+      bullet.y = endY;
+      bullet.vx = stepVx;
+      bullet.vy = stepVy;
+      bullet.lifespan -= dtScale;
+
+      if (Math.random() < 0.25 * dtScale) {
+        newParticles.push(...createSparks(bullet.x, bullet.y, 1, '#a3e635'));
+      }
+
+      if (bullet.lifespan <= 0) {
+        detonateExplosive(bullet, bullet.x, bullet.y, players, newParticles, explosions, hits);
+      } else {
+        activeBullets.push(bullet);
+      }
+      continue;
+    }
+
     const hitT = blockedByObstacle
       ? (earliestObsT ?? 1)
       : hitPlayer
@@ -327,35 +460,7 @@ export function updateBullets(
       const impactY = startY + (endY - startY) * hitT;
 
       if (bullet.blastRadius > 0) {
-        // Rocket / Explosive Splash
-        sounds.playExplosion();
-        newParticles.push(...createExplosionParticles(impactX, impactY, 28));
-
-        for (const p of players) {
-          if (p.isDead || p.isInvulnerable) continue;
-          if (bullet.team && p.team && bullet.team === p.team && p.id !== bullet.shooterId) {
-            continue;
-          }
-
-          const dist = Math.hypot(p.x - impactX, p.y - impactY);
-          if (dist <= bullet.blastRadius) {
-            const falloff = 1 - dist / bullet.blastRadius;
-            const splashDmg = Math.round(bullet.damage * falloff);
-            const angle = Math.atan2(p.y - impactY, p.x - impactX);
-
-            hits.push({
-              targetId: p.id,
-              damage: splashDmg,
-              dealerId: bullet.shooterId,
-              weaponType: bullet.weaponType,
-              isCrit: falloff >= 0.85,
-              impactX: p.x,
-              impactY: p.y - 12,
-              knockbackX: Math.cos(angle) * (8 * falloff),
-              knockbackY: Math.sin(angle) * (8 * falloff) - 2,
-            });
-          }
-        }
+        detonateExplosive(bullet, impactX, impactY, players, newParticles, explosions, hits);
       } else {
         // Direct kinetic hit (directional ricochet sparks on sloped/curved terrain)
         if (blockedByObstacle && terrainHit) {
@@ -422,5 +527,5 @@ export function updateBullets(
     }
   }
 
-  return { activeBullets, newParticles, hits };
+  return { activeBullets, newParticles, explosions, hits };
 }

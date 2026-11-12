@@ -218,6 +218,8 @@ export function formatWeaponShortLabel(weapon: WeaponType | 'hazard' | 'self'): 
       return 'SNIPER';
     case 'rocket':
       return 'RPG';
+    case 'grenade':
+      return 'GRENADE';
     case 'pistol':
       return 'PISTOL';
     case 'hazard':

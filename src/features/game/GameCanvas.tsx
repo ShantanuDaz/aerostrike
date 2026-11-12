@@ -263,6 +263,45 @@ export function GameCanvas({ map }: GameCanvasProps) {
     useCombatStore.getState().cycleWeapon();
   }, []);
 
+  const handleThrowGrenade = useCallback(() => {
+    if (useCTFStore.getState().matchStatus !== 'playing') return;
+    const isMultiplayer = Boolean(useNetworkStore.getState().roomCode);
+    if (!isMultiplayer && useMatchStatsStore.getState().tacticalMenuOpen) return;
+
+    const player = engineWorld.localPlayer ?? usePlayerStore.getState().player;
+    if (player.isDead) return;
+
+    const throwOriginX = player.x;
+    const throwOriginY = player.y - 5;
+
+    const throwResult = useCombatStore.getState().throwGrenade({
+      shooterId: player.id,
+      team: player.team,
+      originX: throwOriginX,
+      originY: throwOriginY,
+      aimAngle: player.aimAngle,
+      map,
+    });
+
+    if (throwResult) {
+      hapticShot('grenade');
+      crosshairSpreadRef.current = Math.min(12, crosshairSpreadRef.current + 3);
+      player.vx -= Math.cos(player.aimAngle) * throwResult.recoil;
+      player.vy -= Math.sin(player.aimAngle) * throwResult.recoil;
+
+      networkManager.broadcastShoot({
+        shooterId: player.id,
+        team: player.team,
+        weaponType: 'grenade',
+        originX: throwOriginX,
+        originY: throwOriginY,
+        aimAngle: player.aimAngle,
+        spreadOffsets: throwResult.spreadOffsets,
+        speedScale: throwResult.speedScale,
+      });
+    }
+  }, [map]);
+
   // Main 60/120 FPS Zero-React-Commit Engine & Render Loop
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -369,6 +408,9 @@ export function GameCanvas({ map }: GameCanvasProps) {
       if (e.code === 'KeyQ' && !e.repeat) {
         handleSwitchWeapon();
       }
+      if (e.code === 'KeyG' && !e.repeat) {
+        handleThrowGrenade();
+      }
       syncKeyboardInput();
     };
 
@@ -402,10 +444,21 @@ export function GameCanvas({ map }: GameCanvasProps) {
       if (useChatStore.getState().isInputFocused) return;
       const isMultiplayer = Boolean(useNetworkStore.getState().roomCode);
       if (!isMultiplayer && useMatchStatsStore.getState().tacticalMenuOpen) return;
-      if (e.button === 0 && useCTFStore.getState().matchStatus === 'playing') {
+      if (useCTFStore.getState().matchStatus !== 'playing') return;
+      if (e.button === 0) {
         isMouseDown = true;
         handleFire();
+      } else if (e.button === 2) {
+        handleThrowGrenade();
       }
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+
+    const handleHudGrenadeThrow = () => {
+      handleThrowGrenade();
     };
 
     const handleMouseUp = () => {
@@ -427,8 +480,10 @@ export function GameCanvas({ map }: GameCanvasProps) {
     canvas.addEventListener('mousemove', handleMouseMove);
     canvas.addEventListener('mouseleave', handleMouseLeave);
     canvas.addEventListener('mousedown', handleMouseDown);
+    canvas.addEventListener('contextmenu', handleContextMenu);
     canvas.addEventListener('wheel', handleWheel, { passive: false });
     window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('aerostrike:throw-grenade', handleHudGrenadeThrow);
 
     const loop = (timestamp: number) => {
       const dt = Math.min(0.05, Math.max(0.001, (timestamp - lastTime) / 1000));
@@ -492,11 +547,13 @@ export function GameCanvas({ map }: GameCanvasProps) {
       canvas.removeEventListener('mousemove', handleMouseMove);
       canvas.removeEventListener('mouseleave', handleMouseLeave);
       canvas.removeEventListener('mousedown', handleMouseDown);
+      canvas.removeEventListener('contextmenu', handleContextMenu);
       canvas.removeEventListener('wheel', handleWheel);
       window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('aerostrike:throw-grenade', handleHudGrenadeThrow);
       sounds.setJetpackBoosting(false);
     };
-  }, [map, handleFire, handleSwitchWeapon]);
+  }, [map, handleFire, handleSwitchWeapon, handleThrowGrenade]);
 
   return (
     <div className="absolute inset-0 w-full h-full overflow-hidden touch-none select-none">
@@ -507,7 +564,10 @@ export function GameCanvas({ map }: GameCanvasProps) {
         }`}
       />
       <MinimapView map={map} />
-      <VirtualControls onSwitchWeapon={handleSwitchWeapon} />
+      <VirtualControls
+        onSwitchWeapon={handleSwitchWeapon}
+        onThrowGrenade={handleThrowGrenade}
+      />
     </div>
   );
 }

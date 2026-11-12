@@ -1,5 +1,11 @@
 import type { WeaponConfig, WeaponType } from './types';
 
+export const GRENADE_STARTING_COUNT = 2;
+export const GRENADE_MAX_COUNT = 3;
+export const GRENADE_FUSE_FRAMES = 95;
+export const GRENADE_GRAVITY = 0.34;
+export const GRENADE_LOB_LIFT = 1.8;
+
 export const WEAPONS: Record<WeaponType, WeaponConfig> = {
   pistol: {
     id: 'pistol',
@@ -66,4 +72,37 @@ export const WEAPONS: Record<WeaponType, WeaponConfig> = {
     maxAmmo: 3,
     color: '#ef4444',
   },
+  grenade: {
+    id: 'grenade',
+    name: 'Frag Grenade',
+    fireRateMs: 900,
+    pellets: 1,
+    speed: 12.2,
+    damage: 95,
+    recoil: 1.4,
+    spread: 0.02,
+    blastRadius: 132,
+    maxAmmo: GRENADE_MAX_COUNT,
+    color: '#84cc16',
+  },
 };
+
+export function computeProjectileLaunchVelocity(
+  weaponType: WeaponType,
+  bulletAngle: number,
+  speed: number,
+): { vx: number; vy: number } {
+  const vx = Math.cos(bulletAngle) * speed;
+  let vy = Math.sin(bulletAngle) * speed;
+  if (weaponType === 'grenade') {
+    vy -= GRENADE_LOB_LIFT;
+  }
+  return { vx, vy };
+}
+
+export function getProjectileLifespanFrames(config: WeaponConfig): number {
+  if (config.id === 'grenade') {
+    return GRENADE_FUSE_FRAMES;
+  }
+  return config.blastRadius > 0 ? 80 : 50;
+}

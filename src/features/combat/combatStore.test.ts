@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCombatStore } from './combatStore';
-import { WEAPONS } from './weaponsConfig';
+import { GRENADE_MAX_COUNT, GRENADE_STARTING_COUNT, WEAPONS } from './weaponsConfig';
 import { engineWorld } from '../game/engineWorld';
 import type { GameMap } from '../map/types';
 
@@ -139,6 +139,75 @@ describe('useCombatStore ammo isolation and firing', () => {
       map: TEST_MAP,
     });
     expect(second).not.toBeNull();
+
+    perfSpy.mockRestore();
+  });
+
+  it('throws frag grenades independently of primary weapon, enforces cooldown/stock, and refills at supply', () => {
+    let nowMs = 2000;
+    const perfSpy = vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
+
+    expect(useCombatStore.getState().grenades).toBe(GRENADE_STARTING_COUNT);
+    expect(useCombatStore.getState().maxGrenades).toBe(GRENADE_MAX_COUNT);
+
+    // Attempting to equip grenade directly as a primary gun is ignored
+    useCombatStore.getState().setEquippedWeapon('grenade');
+    expect(useCombatStore.getState().equippedWeapon).toBe('rifle');
+
+    const first = useCombatStore.getState().throwGrenade({
+      shooterId: 'pilot_1',
+      team: 'blue',
+      originX: 200,
+      originY: 300,
+      aimAngle: 0,
+      map: TEST_MAP,
+    });
+    expect(first).not.toBeNull();
+    expect(first!.firedWeapon).toBe('grenade');
+    expect(first!.bulletsSpawned[0].weaponType).toBe('grenade');
+    expect(useCombatStore.getState().grenades).toBe(GRENADE_STARTING_COUNT - 1);
+    expect(useCombatStore.getState().equippedWeapon).toBe('rifle');
+    expect(useCombatStore.getState().ammoByWeapon.rifle).toBe(WEAPONS.rifle.maxAmmo);
+
+    // Within fireRateMs cooldown -> blocked
+    nowMs += 200;
+    expect(
+      useCombatStore.getState().throwGrenade({
+        shooterId: 'pilot_1',
+        team: 'blue',
+        originX: 200,
+        originY: 300,
+        aimAngle: 0,
+      }),
+    ).toBeNull();
+
+    // Past cooldown -> throws second grenade, leaving 0
+    nowMs += WEAPONS.grenade.fireRateMs;
+    const second = useCombatStore.getState().throwGrenade({
+      shooterId: 'pilot_1',
+      team: 'blue',
+      originX: 200,
+      originY: 300,
+      aimAngle: 0,
+    });
+    expect(second).not.toBeNull();
+    expect(useCombatStore.getState().grenades).toBe(0);
+
+    // Out of grenades -> blocked
+    nowMs += WEAPONS.grenade.fireRateMs;
+    expect(
+      useCombatStore.getState().throwGrenade({
+        shooterId: 'pilot_1',
+        team: 'blue',
+        originX: 200,
+        originY: 300,
+        aimAngle: 0,
+      }),
+    ).toBeNull();
+
+    // Supply station refills up to maxGrenades
+    useCombatStore.getState().refillGrenades();
+    expect(useCombatStore.getState().grenades).toBe(GRENADE_MAX_COUNT);
 
     perfSpy.mockRestore();
   });

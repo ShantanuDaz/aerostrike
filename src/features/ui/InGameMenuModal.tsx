@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { useSettingsStore, type HudScale } from '../settings/settingsStore';
+import {
+  MAX_TOUCH_CONTROL_OPACITY,
+  MAX_TOUCH_CONTROL_SCALE,
+  MIN_TOUCH_CONTROL_OPACITY,
+  MIN_TOUCH_CONTROL_SCALE,
+  useSettingsStore,
+  type HudScale,
+} from '../settings/settingsStore';
 import { useNetworkStore } from '../network/networkStore';
 import {
   MAX_CAMERA_ZOOM,
@@ -63,6 +70,10 @@ export function InGameMenuModal({
   const highContrastTeamMarkers = useSettingsStore((s) => s.highContrastTeamMarkers);
   const touchLayout = useSettingsStore((s) => s.touchLayout);
   const touchAimLine = useSettingsStore((s) => s.touchAimLine);
+  const touchControlScale = useSettingsStore((s) => s.touchControlScale);
+  const touchControlOpacity = useSettingsStore((s) => s.touchControlOpacity);
+  const touchAimMode = useSettingsStore((s) => s.touchAimMode);
+  const showTouchGrenadeButton = useSettingsStore((s) => s.showTouchGrenadeButton);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const toggleMute = useSettingsStore((s) => s.toggleMute);
@@ -311,30 +322,116 @@ export function InGameMenuModal({
 
           {/* Touch Controls Section (Shown prominently when touch HUD active) */}
           {isTouchHUD && (
-            <div className="bg-slate-950/75 border border-slate-800 clip-chamfer p-3 flex flex-col gap-2">
-              <div className="flex items-center gap-1.5 text-[10px] font-mono font-black uppercase tracking-widest text-cyan-300">
-                <Smartphone className="w-3.5 h-3.5" />
-                <span>Touch Ergonomics</span>
+            <div className="bg-slate-950/75 border border-slate-800 clip-chamfer p-3 flex flex-col gap-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-[10px] font-mono font-black uppercase tracking-widest text-cyan-300">
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>Touch Ergonomics</span>
+                </div>
+                <span className="text-[10px] font-mono font-black text-white">
+                  {Math.round(touchControlScale * 100)}%
+                </span>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  sounds.playUiClick();
-                  updateSettings({
-                    touchLayout:
-                      touchLayout === 'right_handed' ? 'left_handed' : 'right_handed',
-                  });
-                }}
-                className="flex flex-col items-start px-2.5 py-1.5 bg-slate-900 border border-slate-700 hover:border-cyan-400/50 clip-chamfer text-left cursor-pointer"
-              >
-                <span className="text-[8px] font-mono uppercase text-slate-400">Thumb Layout</span>
-                <span className="text-[10px] font-mono font-black text-white uppercase">
-                  {touchLayout === 'left_handed' ? 'Left-Handed' : 'Right-Handed'}
+              {/* Controls Size Presets + Slider */}
+              <div className="flex flex-col gap-1.5">
+                <div className="grid grid-cols-4 gap-1">
+                  {[
+                    { label: '70%', value: 0.7 },
+                    { label: '85%', value: 0.85 },
+                    { label: '100%', value: 1.0 },
+                    { label: '115%', value: 1.15 },
+                  ].map((preset) => {
+                    const active = Math.abs(touchControlScale - preset.value) < 0.025;
+                    return (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => {
+                          sounds.playUiClick();
+                          updateSettings({ touchControlScale: preset.value });
+                        }}
+                        className={`py-1 text-[9px] font-mono font-bold uppercase clip-chamfer border cursor-pointer transition ${
+                          active
+                            ? 'bg-cyan-500/20 border-cyan-400 text-white'
+                            : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <input
+                  type="range"
+                  min={MIN_TOUCH_CONTROL_SCALE}
+                  max={MAX_TOUCH_CONTROL_SCALE}
+                  step={0.05}
+                  value={touchControlScale}
+                  onChange={(e) =>
+                    updateSettings({ touchControlScale: Number(e.target.value) })
+                  }
+                  className="w-full accent-cyan-400 cursor-pointer"
+                  aria-label="Touch Controls Size"
+                />
+              </div>
+
+              {/* Controls Opacity Slider */}
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-slate-400 shrink-0">
+                  Opacity {Math.round(touchControlOpacity * 100)}%
                 </span>
-              </button>
+                <input
+                  type="range"
+                  min={MIN_TOUCH_CONTROL_OPACITY}
+                  max={MAX_TOUCH_CONTROL_OPACITY}
+                  step={0.05}
+                  value={touchControlOpacity}
+                  onChange={(e) =>
+                    updateSettings({ touchControlOpacity: Number(e.target.value) })
+                  }
+                  className="flex-1 accent-cyan-400 cursor-pointer"
+                  aria-label="Touch Controls Opacity"
+                />
+              </div>
 
               <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    sounds.playUiClick();
+                    updateSettings({
+                      touchLayout:
+                        touchLayout === 'right_handed' ? 'left_handed' : 'right_handed',
+                    });
+                  }}
+                  className="flex flex-col items-start px-2.5 py-1.5 bg-slate-900 border border-slate-700 hover:border-cyan-400/50 clip-chamfer text-left cursor-pointer"
+                >
+                  <span className="text-[8px] font-mono uppercase text-slate-400">Thumb Layout</span>
+                  <span className="text-[10px] font-mono font-black text-white uppercase">
+                    {touchLayout === 'left_handed' ? 'Left-Handed' : 'Right-Handed'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    sounds.playUiClick();
+                    updateSettings({
+                      touchAimMode:
+                        touchAimMode === 'precision' ? 'instant' : 'precision',
+                    });
+                  }}
+                  className="flex flex-col items-start px-2.5 py-1.5 bg-slate-900 border border-slate-700 hover:border-cyan-400/50 clip-chamfer text-left cursor-pointer"
+                >
+                  <span className="text-[8px] font-mono uppercase text-slate-400">Aim Fire Mode</span>
+                  <span className="text-[10px] font-mono font-black text-cyan-200 uppercase">
+                    {touchAimMode === 'instant' ? 'Instant Drag' : 'Perimeter Edge'}
+                  </span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5">
                 <button
                   type="button"
                   onClick={() => {
@@ -348,6 +445,20 @@ export function InGameMenuModal({
                   }`}
                 >
                   Laser: {touchAimLine ? 'ON' : 'OFF'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    sounds.playUiClick();
+                    updateSettings({ showTouchGrenadeButton: !showTouchGrenadeButton });
+                  }}
+                  className={`px-2 py-1.5 text-[9px] font-mono font-bold uppercase clip-chamfer border cursor-pointer ${
+                    showTouchGrenadeButton
+                      ? 'bg-lime-500/15 border-lime-400/60 text-lime-200'
+                      : 'bg-slate-900 border-slate-800 text-slate-400'
+                  }`}
+                >
+                  Frag Btn: {showTouchGrenadeButton ? 'ON' : 'OFF'}
                 </button>
                 <button
                   type="button"

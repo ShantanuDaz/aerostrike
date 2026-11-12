@@ -130,6 +130,9 @@ class SoundEngine {
       case 'rocket':
         this.playRocketLaunch();
         break;
+      case 'grenade':
+        this.playGrenadeThrow();
+        break;
     }
   }
 
@@ -239,6 +242,60 @@ class SoundEngine {
     osc.stop(t + 0.35);
   }
 
+  public playGrenadeThrow() {
+    if (this.isMuted || this.masterVolume <= 0) return;
+    const dest = this.getOutputNode();
+    if (!this.ctx || !dest) return;
+
+    const t = this.ctx.currentTime;
+    // Pin snap + soft lob whoosh
+    const pinOsc = this.ctx.createOscillator();
+    const pinGain = this.ctx.createGain();
+    pinOsc.type = 'triangle';
+    pinOsc.frequency.setValueAtTime(1150, t);
+    pinOsc.frequency.exponentialRampToValueAtTime(520, t + 0.05);
+    pinGain.gain.setValueAtTime(0.18, t);
+    pinGain.gain.exponentialRampToValueAtTime(0.001, t + 0.055);
+    pinOsc.connect(pinGain);
+    pinGain.connect(dest);
+    pinOsc.start(t);
+    pinOsc.stop(t + 0.055);
+
+    const whooshOsc = this.ctx.createOscillator();
+    const whooshGain = this.ctx.createGain();
+    whooshOsc.type = 'sine';
+    whooshOsc.frequency.setValueAtTime(240, t + 0.02);
+    whooshOsc.frequency.exponentialRampToValueAtTime(110, t + 0.16);
+    whooshGain.gain.setValueAtTime(0.2, t + 0.02);
+    whooshGain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+    whooshOsc.connect(whooshGain);
+    whooshGain.connect(dest);
+    whooshOsc.start(t + 0.02);
+    whooshOsc.stop(t + 0.16);
+  }
+
+  public playGrenadeBounce() {
+    if (this.isMuted || this.masterVolume <= 0) return;
+    const dest = this.getOutputNode();
+    if (!this.ctx || !dest) return;
+
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(920, t);
+    osc.frequency.exponentialRampToValueAtTime(580, t + 0.045);
+
+    gain.gain.setValueAtTime(0.11, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
+
+    osc.connect(gain);
+    gain.connect(dest);
+    osc.start(t);
+    osc.stop(t + 0.045);
+  }
+
   public playRocketLaunch() {
     if (this.isMuted || this.masterVolume <= 0) return;
     const dest = this.getOutputNode();
@@ -283,11 +340,11 @@ class SoundEngine {
 
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(400, t);
-    filter.frequency.exponentialRampToValueAtTime(40, t + 0.45);
+    filter.frequency.setValueAtTime(520, t);
+    filter.frequency.exponentialRampToValueAtTime(45, t + 0.45);
 
     const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(0.7, t);
+    gain.gain.setValueAtTime(0.75, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
 
     noise.connect(filter);
@@ -295,6 +352,19 @@ class SoundEngine {
     gain.connect(dest);
 
     noise.start(t);
+
+    // Sub-bass concussive punch
+    const subOsc = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(135, t);
+    subOsc.frequency.exponentialRampToValueAtTime(30, t + 0.28);
+    subGain.gain.setValueAtTime(0.55, t);
+    subGain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+    subOsc.connect(subGain);
+    subGain.connect(dest);
+    subOsc.start(t);
+    subOsc.stop(t + 0.3);
   }
 
   // --- JETPACK CONTINUOUS SOUND ---

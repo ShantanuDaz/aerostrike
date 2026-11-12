@@ -33,6 +33,10 @@ export function hapticShot(weapon?: string): void {
     triggerHaptic(18);
     return;
   }
+  if (weapon === 'grenade') {
+    triggerHaptic(14);
+    return;
+  }
   triggerHaptic(8);
 }
 

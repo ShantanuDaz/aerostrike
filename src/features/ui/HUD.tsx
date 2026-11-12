@@ -17,6 +17,7 @@ import { InGameMenuModal } from './InGameMenuModal';
 import { HudCommsOverlay, VoiceMicButton } from '../comms/CommsPanel';
 import {
   AlertTriangle,
+  Bomb,
   Flag,
   Pause,
   RefreshCw,
@@ -67,6 +68,8 @@ export function HUD({ onExitToWarRoom, onAbortRoom }: HUDProps) {
   const currentAmmo = useCombatStore((s) => s.currentAmmo);
   const ammoByWeapon = useCombatStore((s) => s.ammoByWeapon);
   const lastFiredAt = useCombatStore((s) => s.lastFiredAt);
+  const grenades = useCombatStore((s) => s.grenades);
+  const maxGrenades = useCombatStore((s) => s.maxGrenades);
   const ammoNotice = useCombatStore((s) => s.ammoNotice);
   const clearAmmoNotice = useCombatStore((s) => s.clearAmmoNotice);
   const setEquippedWeapon = useCombatStore((s) => s.setEquippedWeapon);
@@ -717,6 +720,39 @@ export function HUD({ onExitToWarRoom, onAbortRoom }: HUDProps) {
                 </button>
               );
             })}
+            <div className="h-5 w-px bg-slate-700/75 mx-0.5 shrink-0" />
+            <button
+              type="button"
+              disabled={grenades <= 0}
+              onClick={() => {
+                if (grenades > 0) {
+                  window.dispatchEvent(new CustomEvent('aerostrike:throw-grenade'));
+                }
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider transition clip-chamfer border ${
+                grenades > 0
+                  ? 'bg-lime-950/70 hover:bg-lime-900/70 border-lime-500/60 text-lime-200 font-bold cursor-pointer'
+                  : 'bg-slate-950/40 border-transparent text-slate-600 font-bold opacity-45 cursor-not-allowed'
+              }`}
+              title={
+                grenades > 0
+                  ? 'Throw Frag Grenade [Key G or Right-Click]'
+                  : 'Out of Frag Grenades — Resupply at Supply Crate'
+              }
+            >
+              <span
+                className={`text-[9px] px-1 ${
+                  grenades > 0 ? 'bg-lime-400 text-slate-950 font-black' : 'text-slate-500'
+                }`}
+              >
+                G
+              </span>
+              <Bomb className={`w-3 h-3 ${grenades > 0 ? 'text-lime-300' : 'text-slate-600'}`} />
+              <span>Frag</span>
+              <span className={grenades > 0 ? 'text-lime-300 font-black' : 'text-slate-500'}>
+                {grenades}/{maxGrenades}
+              </span>
+            </button>
             <div
               ref={dockCooldownRef}
               style={{ transform: 'scaleX(0)' }}

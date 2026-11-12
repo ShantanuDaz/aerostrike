@@ -1,4 +1,4 @@
-export type WeaponType = 'pistol' | 'rifle' | 'shotgun' | 'sniper' | 'rocket';
+export type WeaponType = 'pistol' | 'rifle' | 'shotgun' | 'sniper' | 'rocket' | 'grenade';
 
 export interface WeaponConfig {
   id: WeaponType;
@@ -39,6 +39,24 @@ export interface Particle {
   color: string;
   alpha: number;
   decay: number;
+  gravity?: number;
+  drag?: number;
+}
+
+export interface ExplosionEvent {
+  x: number;
+  y: number;
+  radius: number;
+  weaponType: WeaponType;
+}
+
+export interface BlastVisualEffect {
+  x: number;
+  y: number;
+  radius: number;
+  weaponType: WeaponType;
+  age: number;
+  duration: number;
 }
 
 export interface ActiveWeaponPickup {

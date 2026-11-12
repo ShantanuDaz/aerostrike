@@ -1,7 +1,13 @@
 import { create } from 'zustand';
 import type { ActiveWeaponPickup, Bullet, Particle, WeaponType } from './types';
 import type { GameMap } from '../map/types';
-import { WEAPONS } from './weaponsConfig';
+import {
+  GRENADE_MAX_COUNT,
+  GRENADE_STARTING_COUNT,
+  WEAPONS,
+  computeProjectileLaunchVelocity,
+  getProjectileLifespanFrames,
+} from './weaponsConfig';
 import { sounds } from '../audio/soundEngine';
 import { engineWorld } from '../game/engineWorld';
 import { getSafeMuzzlePoint } from './updateBullets';
@@ -17,6 +23,7 @@ function createInitialAmmoMap(startingWeapon: WeaponType = 'rifle'): Record<Weap
     shotgun: 0,
     sniper: 0,
     rocket: 0,
+    grenade: GRENADE_STARTING_COUNT,
   };
   ammo[startingWeapon] = WEAPONS[startingWeapon].maxAmmo;
   return ammo;
@@ -36,11 +43,22 @@ export interface AmmoNotice {
   atMs: number;
 }
 
+export interface FireResult {
+  recoil: number;
+  bulletsSpawned: Bullet[];
+  firedWeapon: WeaponType;
+  spreadOffsets: number[];
+  speedScale: number;
+}
+
 interface CombatStore {
   equippedWeapon: WeaponType;
   currentAmmo: number;
   ammoByWeapon: Record<WeaponType, number>;
   lastFiredAt: number;
+  grenades: number;
+  maxGrenades: number;
+  lastGrenadeAt: number;
   ammoNotice: AmmoNotice | null;
 
   setBullets: (bullets: Bullet[]) => void;
@@ -48,16 +66,12 @@ interface CombatStore {
   initLoadout: (startingWeapon?: WeaponType) => void;
   setEquippedWeapon: (weapon: WeaponType) => void;
   grantWeaponPickup: (weapon: WeaponType) => void;
+  refillGrenades: (count?: number) => void;
   cycleWeapon: () => void;
   setPickups: (pickups: ActiveWeaponPickup[]) => void;
   clearAmmoNotice: () => void;
-  fireWeapon: (params: FireWeaponParams) => {
-    recoil: number;
-    bulletsSpawned: Bullet[];
-    firedWeapon: WeaponType;
-    spreadOffsets: number[];
-    speedScale: number;
-  } | null;
+  fireWeapon: (params: FireWeaponParams) => FireResult | null;
+  throwGrenade: (params: FireWeaponParams) => FireResult | null;
   addBullets: (bullets: Bullet[]) => void;
   addParticles: (particles: Particle[]) => void;
 }
@@ -67,6 +81,9 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
   currentAmmo: WEAPONS.rifle.maxAmmo,
   ammoByWeapon: createInitialAmmoMap('rifle'),
   lastFiredAt: 0,
+  grenades: GRENADE_STARTING_COUNT,
+  maxGrenades: GRENADE_MAX_COUNT,
+  lastGrenadeAt: 0,
   ammoNotice: null,
 
   setBullets: (bullets) => {
@@ -80,18 +97,23 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
   clearAmmoNotice: () => set({ ammoNotice: null }),
 
   initLoadout: (startingWeapon = 'rifle') => {
-    const ammoByWeapon = createInitialAmmoMap(startingWeapon);
+    const safeStart: WeaponType = startingWeapon === 'grenade' ? 'rifle' : startingWeapon;
+    const ammoByWeapon = createInitialAmmoMap(safeStart);
     set({
-      equippedWeapon: startingWeapon,
+      equippedWeapon: safeStart,
       ammoByWeapon,
-      currentAmmo: ammoByWeapon[startingWeapon],
+      currentAmmo: ammoByWeapon[safeStart],
       lastFiredAt: 0,
+      grenades: GRENADE_STARTING_COUNT,
+      maxGrenades: GRENADE_MAX_COUNT,
+      lastGrenadeAt: 0,
       ammoNotice: null,
     });
     engineWorld.notifyUrgentLocalStateChange();
   },
 
   setEquippedWeapon: (weapon) => {
+    if (weapon === 'grenade') return;
     const { equippedWeapon, ammoByWeapon } = get();
     const ammo = ammoByWeapon[weapon];
     if (WEAPONS[weapon].maxAmmo !== Infinity && ammo <= 0) {
@@ -108,6 +130,10 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
   },
 
   grantWeaponPickup: (weapon) => {
+    if (weapon === 'grenade') {
+      get().refillGrenades(GRENADE_MAX_COUNT);
+      return;
+    }
     const { ammoByWeapon } = get();
     const grantedAmmo = WEAPONS[weapon].maxAmmo;
     const nextAmmoByWeapon = {
@@ -121,6 +147,19 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
       ammoNotice: null,
     });
     engineWorld.notifyUrgentLocalStateChange();
+  },
+
+  refillGrenades: (count = GRENADE_MAX_COUNT) => {
+    const state = get();
+    const nextCount = Math.min(state.maxGrenades, Math.max(state.grenades, count));
+    if (nextCount === state.grenades) return;
+    set({
+      grenades: nextCount,
+      ammoByWeapon: {
+        ...state.ammoByWeapon,
+        grenade: nextCount,
+      },
+    });
   },
 
   cycleWeapon: () => {
@@ -211,6 +250,8 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
 
       spreadOffsets.push(angleOffset);
       const bulletAngle = aimAngle + angleOffset;
+      const lifespan = getProjectileLifespanFrames(activeConfig);
+      const { vx, vy } = computeProjectileLaunchVelocity(firedWeapon, bulletAngle, speed);
 
       spawned.push({
         id: `b_${shooterId}_${bulletIdCounter++}`,
@@ -219,12 +260,12 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
         weaponType: firedWeapon,
         x: muzzle.x,
         y: muzzle.y,
-        vx: Math.cos(bulletAngle) * speed,
-        vy: Math.sin(bulletAngle) * speed,
+        vx,
+        vy,
         damage: activeConfig.damage,
         blastRadius: activeConfig.blastRadius,
-        lifespan: activeConfig.blastRadius > 0 ? 80 : 50,
-        maxLifespan: activeConfig.blastRadius > 0 ? 80 : 50,
+        lifespan,
+        maxLifespan: lifespan,
       });
     }
 
@@ -235,6 +276,62 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
       bulletsSpawned: spawned,
       firedWeapon,
       spreadOffsets,
+      speedScale,
+    };
+  },
+
+  throwGrenade: ({ shooterId, team, originX, originY, aimAngle, map }) => {
+    const state = get();
+    if (state.grenades <= 0) {
+      return null;
+    }
+
+    const now = performance.now();
+    const cfg = WEAPONS.grenade;
+    if (now - state.lastGrenadeAt < cfg.fireRateMs) {
+      return null;
+    }
+
+    const nextGrenades = Math.max(0, state.grenades - 1);
+    set({
+      grenades: nextGrenades,
+      lastGrenadeAt: now,
+      ammoByWeapon: {
+        ...state.ammoByWeapon,
+        grenade: nextGrenades,
+      },
+    });
+
+    sounds.playWeaponSound('grenade');
+
+    const muzzle = getSafeMuzzlePoint(originX, originY, aimAngle, 16, map);
+    const speedScale = 1.0;
+    const speed = cfg.speed * speedScale;
+    const { vx, vy } = computeProjectileLaunchVelocity('grenade', aimAngle, speed);
+    const lifespan = getProjectileLifespanFrames(cfg);
+
+    const grenadeBullet: Bullet = {
+      id: `g_${shooterId}_${bulletIdCounter++}`,
+      shooterId,
+      team,
+      weaponType: 'grenade',
+      x: muzzle.x,
+      y: muzzle.y,
+      vx,
+      vy,
+      damage: cfg.damage,
+      blastRadius: cfg.blastRadius,
+      lifespan,
+      maxLifespan: lifespan,
+    };
+
+    engineWorld.addBullets([grenadeBullet]);
+
+    return {
+      recoil: cfg.recoil,
+      bulletsSpawned: [grenadeBullet],
+      firedWeapon: 'grenade',
+      spreadOffsets: [0],
       speedScale,
     };
   },
