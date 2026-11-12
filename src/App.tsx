@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState, type ReactNode } from 'react';
 import { MainMenuScreen } from './features/screens/MainMenuScreen';
 import type { SoloLaunchConfig } from './features/screens/mainMenu/SoloSkirmishModal';
 import type { ScreenState } from './features/screens/types';
@@ -22,6 +22,7 @@ import {
 } from './features/controls/mobileFullscreen';
 import {
   IOSInstallModal,
+  PwaRegisterBridge,
   PwaUpdateBanner,
   parseLaunchParams,
   syncScreenWakeLock,
@@ -117,7 +118,7 @@ export const App = () => {
       }
       try {
         const nextUrl = `${window.location.origin}${window.location.pathname}?room=${initialBoot.autoHostCode}`;
-        window.history.replaceState(null, '', nextUrl);
+        window.history.replaceState(window.history.state, '', nextUrl);
       } catch {
         // ignore
       }
@@ -126,7 +127,7 @@ export const App = () => {
         const cleanUrl = `${window.location.origin}${window.location.pathname}${
           initialBoot.roomCode ? `?room=${encodeURIComponent(initialBoot.roomCode)}` : ''
         }`;
-        window.history.replaceState(null, '', cleanUrl);
+        window.history.replaceState(window.history.state, '', cleanUrl);
       } catch {
         // ignore
       }
@@ -405,12 +406,62 @@ export const App = () => {
     setInvitedRoom(null);
     try {
       const cleanUrl = `${window.location.origin}${window.location.pathname}`;
-      window.history.replaceState(null, '', cleanUrl);
+      window.history.replaceState(window.history.state, '', cleanUrl);
     } catch {
       // ignore restricted History API environments
     }
     setScreen('main_menu');
   };
+
+  // Native Android/browser back-gesture handling so Back navigates in-app instead of exiting
+  const pushedSubscreenRef = useRef(false);
+  const popStateHandlerRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    popStateHandlerRef.current = () => {
+      if (screen === 'settings') {
+        setScreen('main_menu');
+      } else if (screen === 'connecting' || screen === 'war_room') {
+        handleLeaveWarRoom();
+      } else if (screen === 'in_game') {
+        const statsStore = useMatchStatsStore.getState();
+        if (matchStatus === 'game_over' || statsStore.tacticalMenuOpen) {
+          statsStore.setTacticalMenuOpen(false);
+          handleExitActiveBattle();
+        } else {
+          statsStore.setTacticalMenuOpen(true);
+          try {
+            window.history.pushState({ aeroSubscreen: true }, '');
+          } catch {
+            // ignore
+          }
+        }
+      }
+    };
+  });
+
+  useEffect(() => {
+    const onPopState = () => {
+      popStateHandlerRef.current();
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (screen !== 'main_menu') {
+        if (!pushedSubscreenRef.current && !window.history.state?.aeroSubscreen) {
+          window.history.pushState({ aeroSubscreen: true }, '');
+        }
+        pushedSubscreenRef.current = true;
+      } else {
+        pushedSubscreenRef.current = false;
+      }
+    } catch {
+      // ignore restricted History API environments
+    }
+  }, [screen]);
 
   let content: ReactNode;
 
@@ -483,6 +534,7 @@ export const App = () => {
 
   return (
     <>
+      <PwaRegisterBridge />
       {content}
       <IOSInstallModal />
       {screen !== 'in_game' && <PwaUpdateBanner />}

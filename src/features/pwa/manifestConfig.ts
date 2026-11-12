@@ -1,0 +1,114 @@
+export const pwaManifest = {
+  id: '/',
+  name: 'AEROSTRIKE: OMEGA',
+  short_name: 'AEROSTRIKE',
+  description:
+    'High-octane 2D serverless P2P Capture The Flag multiplayer shooter with jetpacks and recoil physics.',
+  start_url: '/',
+  scope: '/',
+  display: 'standalone' as const,
+  display_override: ['standalone', 'minimal-ui'] as ('standalone' | 'minimal-ui')[],
+  orientation: 'any' as const,
+  background_color: '#060913',
+  theme_color: '#060913',
+  categories: ['games', 'action', 'multiplayer'],
+  prefer_related_applications: false,
+  launch_handler: {
+    client_mode: ['focus-existing', 'auto'] as ('focus-existing' | 'auto')[],
+  },
+  icons: [
+    {
+      src: '/icon-192.png',
+      sizes: '192x192',
+      type: 'image/png',
+      purpose: 'any',
+    },
+    {
+      src: '/icon-512.png',
+      sizes: '512x512',
+      type: 'image/png',
+      purpose: 'any',
+    },
+    {
+      src: '/icon-maskable-192.png',
+      sizes: '192x192',
+      type: 'image/png',
+      purpose: 'maskable',
+    },
+    {
+      src: '/icon-maskable-512.png',
+      sizes: '512x512',
+      type: 'image/png',
+      purpose: 'maskable',
+    },
+    {
+      src: '/icon.svg',
+      sizes: 'any',
+      type: 'image/svg+xml',
+      purpose: 'any',
+    },
+    {
+      src: '/icon-maskable.svg',
+      sizes: 'any',
+      type: 'image/svg+xml',
+      purpose: 'maskable',
+    },
+  ],
+  shortcuts: [
+    {
+      name: 'Solo Skirmish',
+      short_name: 'Solo',
+      description: 'Deploy immediately into an offline AI bot Capture The Flag match.',
+      url: '/?action=solo',
+      icons: [
+        {
+          src: '/icons/shortcut-solo.png',
+          sizes: '192x192',
+          type: 'image/png',
+        },
+      ],
+    },
+    {
+      name: 'Host P2P Match',
+      short_name: 'Host',
+      description: 'Create a new War Room and invite friends via QR code or link.',
+      url: '/?action=host',
+      icons: [
+        {
+          src: '/icons/shortcut-host.png',
+          sizes: '192x192',
+          type: 'image/png',
+        },
+      ],
+    },
+    {
+      name: 'Pilot Armory',
+      short_name: 'Armory',
+      description: 'Customize your pilot exo-suit, loadout, HUD scale, and controls.',
+      url: '/?action=armory',
+      icons: [
+        {
+          src: '/icons/shortcut-armory.png',
+          sizes: '192x192',
+          type: 'image/png',
+        },
+      ],
+    },
+  ],
+  screenshots: [
+    {
+      src: '/screenshots/combat-wide.png',
+      sizes: '1280x720',
+      type: 'image/png',
+      form_factor: 'wide' as const,
+      label: 'AEROSTRIKE: OMEGA 2D Jetpack Capture The Flag Combat',
+    },
+    {
+      src: '/screenshots/mobile-narrow.png',
+      sizes: '540x960',
+      type: 'image/png',
+      form_factor: 'narrow' as const,
+      label: 'AEROSTRIKE: OMEGA Orbital Hangar & Solo Skirmish',
+    },
+  ],
+};

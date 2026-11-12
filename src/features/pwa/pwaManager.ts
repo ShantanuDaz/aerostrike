@@ -30,10 +30,9 @@ interface WindowWithLaunchQueue extends Window {
 let initialized = false;
 let deferredInstallPrompt: BeforeInstallPromptEvent | null = null;
 let swRegistration: ServiceWorkerRegistration | null = null;
-let waitingWorker: ServiceWorker | null = null;
+let updateServiceWorkerFn: ((reloadPage?: boolean) => Promise<void>) | null = null;
 let wakeLockSentinel: WakeLockSentinelLike | null = null;
 let wakeLockDesired = false;
-let reloadingForSwUpdate = false;
 
 export function parseLaunchParams(search: string): ParsedLaunchParams {
   const params = new URLSearchParams(search);
@@ -77,7 +76,6 @@ export async function shareRoomInvite(
       if (err instanceof Error && err.name === 'AbortError') {
         return 'cancelled';
       }
-      // Fall through to clipboard fallback if share failed for another reason
     }
   }
 
@@ -128,44 +126,62 @@ export async function requestPersistentStorage(): Promise<boolean> {
 }
 
 export async function querySwCacheStatus(): Promise<void> {
-  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
-  const controller = navigator.serviceWorker.controller || swRegistration?.active;
-  if (!controller) return;
-
+  if (typeof window === 'undefined' || !('caches' in window)) return;
   try {
-    const channel = new MessageChannel();
-    channel.port1.onmessage = (event) => {
-      const data = event.data as { version?: string; cachedCount?: number } | undefined;
-      if (!data) return;
-      usePwaStore.getState().setSwStatus({
-        swVersion: data.version ?? null,
-        offlineAssetCount: typeof data.cachedCount === 'number' ? data.cachedCount : null,
-      });
-    };
-    controller.postMessage({ type: 'GET_CACHE_STATUS' }, [channel.port2]);
+    const keys = await window.caches.keys();
+    let totalCount = 0;
+    for (const key of keys) {
+      if (key.includes('workbox') || key.includes('aerostrike')) {
+        const cache = await window.caches.open(key);
+        totalCount += (await cache.keys()).length;
+      }
+    }
+    if (totalCount === 0 && keys.length > 0) {
+      for (const key of keys) {
+        const cache = await window.caches.open(key);
+        totalCount += (await cache.keys()).length;
+      }
+    }
+    usePwaStore.getState().setSwStatus({
+      offlineAssetCount: totalCount,
+    });
   } catch {
-    // ignore restricted message channel contexts
+    // ignore restricted Cache API contexts
   }
 }
 
-function trackInstallingWorker(worker: ServiceWorker | null) {
-  if (!worker) return;
-  worker.addEventListener('statechange', () => {
-    if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-      waitingWorker = worker;
-      usePwaStore.getState().setSwStatus({ swUpdateReady: true });
-    }
-  });
+export function bindWorkboxController(
+  registration: ServiceWorkerRegistration | undefined,
+  updateFn: (reloadPage?: boolean) => Promise<void>,
+): void {
+  if (registration) {
+    swRegistration = registration;
+  }
+  updateServiceWorkerFn = updateFn;
+  if (registration) {
+    usePwaStore.getState().setSwStatus({
+      swRegistered: true,
+      swUpdateReady: Boolean(registration.waiting && navigator.serviceWorker?.controller),
+    });
+    void querySwCacheStatus();
+  }
 }
 
 export async function checkForSwUpdate(): Promise<boolean> {
-  if (!swRegistration) return false;
+  const reg =
+    swRegistration ||
+    (typeof navigator !== 'undefined' && 'serviceWorker' in navigator
+      ? await navigator.serviceWorker.getRegistration().catch(() => undefined)
+      : undefined);
+
+  if (!reg) return false;
+  swRegistration = reg;
+
   const store = usePwaStore.getState();
   store.setSwStatus({ swChecking: true });
   try {
-    await swRegistration.update();
-    if (swRegistration.waiting) {
-      waitingWorker = swRegistration.waiting;
+    await reg.update();
+    if (reg.waiting) {
       store.setSwStatus({ swUpdateReady: true });
       return true;
     }
@@ -179,16 +195,20 @@ export async function checkForSwUpdate(): Promise<boolean> {
 }
 
 export function applySwUpdate(): void {
-  const target = waitingWorker || swRegistration?.waiting;
-  if (!target) {
-    window.location.reload();
+  if (updateServiceWorkerFn) {
+    void updateServiceWorkerFn(true);
     return;
   }
-  reloadingForSwUpdate = true;
-  target.postMessage({ type: 'SKIP_WAITING' });
+  if (swRegistration?.waiting) {
+    swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+    return;
+  }
+  window.location.reload();
 }
 
-export async function promptNativeInstall(): Promise<'accepted' | 'dismissed' | 'ios_guide' | 'unavailable'> {
+export async function promptNativeInstall(): Promise<
+  'accepted' | 'dismissed' | 'ios_guide' | 'unavailable'
+> {
   const store = usePwaStore.getState();
 
   if (deferredInstallPrompt) {
@@ -324,7 +344,7 @@ export function initPwaLifecycle(onExternalRoomLaunch?: (roomCode: string) => vo
     usePwaStore.getState().setIsOnline(false);
   });
 
-  // Track display-mode transitions (e.g., installed mid-session or desktop window mode change)
+  // Track display-mode transitions
   const standaloneMql = window.matchMedia?.('(display-mode: standalone)');
   const fullscreenMql = window.matchMedia?.('(display-mode: fullscreen)');
   const syncDisplayMode = () => {
@@ -362,40 +382,20 @@ export function initPwaLifecycle(onExternalRoomLaunch?: (roomCode: string) => vo
     }
   });
 
-  // Register Service Worker & update lifecycle
-  if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker
-        .register('/sw.js')
-        .then((reg) => {
+  // Query cached assets once SW is active
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      void querySwCacheStatus();
+    });
+    void navigator.serviceWorker
+      .getRegistration()
+      .then((reg) => {
+        if (reg) {
           swRegistration = reg;
           usePwaStore.getState().setSwStatus({ swRegistered: true });
           void querySwCacheStatus();
-
-          if (reg.waiting && navigator.serviceWorker.controller) {
-            waitingWorker = reg.waiting;
-            usePwaStore.getState().setSwStatus({ swUpdateReady: true });
-          }
-
-          if (reg.installing) {
-            trackInstallingWorker(reg.installing);
-          }
-
-          reg.addEventListener('updatefound', () => {
-            trackInstallingWorker(reg.installing);
-          });
-        })
-        .catch((err) => {
-          console.warn('[PWA] Service Worker registration failed:', err);
-        });
-    });
-
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      void querySwCacheStatus();
-      if (reloadingForSwUpdate) {
-        reloadingForSwUpdate = false;
-        window.location.reload();
-      }
-    });
+        }
+      })
+      .catch(() => {});
   }
 }

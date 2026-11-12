@@ -6,7 +6,13 @@ import {
   parseLaunchParams,
   shareRoomInvite,
 } from './pwaManager';
+import { pwaManifest } from './manifestConfig';
 import { usePwaStore } from './pwaStore';
+
+function readPngBitDepth(filePath: string): number {
+  const buf = fs.readFileSync(filePath);
+  return buf.readUInt8(24);
+}
 
 describe('PWA launch params, share sheet, store & manifest integrity', () => {
   const originalNavigator = globalThis.navigator;
@@ -19,6 +25,7 @@ describe('PWA launch params, share sheet, store & manifest integrity', () => {
       isOnline: true,
       swRegistered: false,
       swUpdateReady: false,
+      swOfflineReady: false,
       swVersion: null,
       offlineAssetCount: null,
       wakeLockActive: false,
@@ -94,52 +101,61 @@ describe('PWA launch params, share sheet, store & manifest integrity', () => {
 
   it('tracks display mode and SW update state in usePwaStore', () => {
     const store = usePwaStore.getState();
-    store.setDisplayMode('fullscreen');
+    store.setDisplayMode('standalone');
     expect(usePwaStore.getState().isInstalled).toBe(true);
-    expect(usePwaStore.getState().displayMode).toBe('fullscreen');
+    expect(usePwaStore.getState().displayMode).toBe('standalone');
 
-    store.setSwStatus({ swRegistered: true, swUpdateReady: true, offlineAssetCount: 24 });
+    store.setSwStatus({
+      swRegistered: true,
+      swUpdateReady: true,
+      swOfflineReady: true,
+      offlineAssetCount: 24,
+    });
     expect(usePwaStore.getState().swRegistered).toBe(true);
     expect(usePwaStore.getState().swUpdateReady).toBe(true);
+    expect(usePwaStore.getState().swOfflineReady).toBe(true);
     expect(usePwaStore.getState().offlineAssetCount).toBe(24);
   });
 
-  it('has a valid manifest.json with separated any/maskable icons and existing public files', () => {
+  it('has a valid manifest config with 8-bit PNGs before SVGs and existing public files', () => {
     const publicDir = path.resolve(process.cwd(), 'public');
-    const manifestPath = path.join(publicDir, 'manifest.json');
-    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
-      display_override?: string[];
-      icons: { src: string; purpose?: string }[];
-      shortcuts?: { url: string; icons?: { src: string }[] }[];
-      screenshots?: { src: string; form_factor?: string }[];
-      theme_color?: string;
-      background_color?: string;
-    };
 
-    expect(manifest.theme_color).toBe('#060913');
-    expect(manifest.background_color).toBe('#060913');
-    expect(manifest.display_override).toContain('fullscreen');
-    expect(manifest.display_override).toContain('standalone');
+    expect(pwaManifest.theme_color).toBe('#060913');
+    expect(pwaManifest.background_color).toBe('#060913');
+    expect(pwaManifest.display).toBe('standalone');
+    expect(pwaManifest.display_override).toContain('standalone');
+    expect(pwaManifest.orientation).toBe('any');
+    expect(pwaManifest.start_url).toBe('/');
+
+    // Ensure raster PNGs appear before vector SVGs for Android WebAPK compatibility
+    const firstSvgIdx = pwaManifest.icons.findIndex((i) => i.type === 'image/svg+xml');
+    const lastPngIdx = pwaManifest.icons.findLastIndex((i) => i.type === 'image/png');
+    expect(lastPngIdx).toBeGreaterThanOrEqual(0);
+    expect(firstSvgIdx).toBeGreaterThan(lastPngIdx);
 
     // Verify any and maskable icons are separated cleanly and files exist
-    const purposes = manifest.icons.map((i) => i.purpose);
+    const purposes = pwaManifest.icons.map((i) => i.purpose);
     expect(purposes).toContain('any');
     expect(purposes).toContain('maskable');
     expect(purposes).not.toContain('any maskable');
 
-    for (const icon of manifest.icons) {
+    for (const icon of pwaManifest.icons) {
       const filePath = path.join(publicDir, icon.src.replace(/^\//, ''));
       expect(fs.existsSync(filePath), `Missing manifest icon: ${icon.src}`).toBe(true);
-    }
-
-    for (const shortcut of manifest.shortcuts ?? []) {
-      for (const sIcon of shortcut.icons ?? []) {
-        const filePath = path.join(publicDir, sIcon.src.replace(/^\//, ''));
-        expect(fs.existsSync(filePath), `Missing shortcut icon: ${sIcon.src}`).toBe(true);
+      if (icon.type === 'image/png') {
+        expect(readPngBitDepth(filePath), `Expected 8-bit PNG for ${icon.src}`).toBe(8);
       }
     }
 
-    for (const shot of manifest.screenshots ?? []) {
+    for (const shortcut of pwaManifest.shortcuts ?? []) {
+      for (const sIcon of shortcut.icons ?? []) {
+        const filePath = path.join(publicDir, sIcon.src.replace(/^\//, ''));
+        expect(fs.existsSync(filePath), `Missing shortcut icon: ${sIcon.src}`).toBe(true);
+        expect(readPngBitDepth(filePath), `Expected 8-bit PNG for ${sIcon.src}`).toBe(8);
+      }
+    }
+
+    for (const shot of pwaManifest.screenshots ?? []) {
       const filePath = path.join(publicDir, shot.src.replace(/^\//, ''));
       expect(fs.existsSync(filePath), `Missing screenshot: ${shot.src}`).toBe(true);
     }

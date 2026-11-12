@@ -13,6 +13,7 @@ export interface PwaState {
   showIOSGuideModal: boolean;
   swRegistered: boolean;
   swUpdateReady: boolean;
+  swOfflineReady: boolean;
   swChecking: boolean;
   swVersion: string | null;
   offlineAssetCount: number | null;
@@ -29,7 +30,12 @@ export interface PwaState {
     partial: Partial<
       Pick<
         PwaState,
-        'swRegistered' | 'swUpdateReady' | 'swChecking' | 'swVersion' | 'offlineAssetCount'
+        | 'swRegistered'
+        | 'swUpdateReady'
+        | 'swOfflineReady'
+        | 'swChecking'
+        | 'swVersion'
+        | 'offlineAssetCount'
       >
     >,
   ) => void;
@@ -70,6 +76,7 @@ export const usePwaStore = create<PwaState>((set) => ({
   showIOSGuideModal: false,
   swRegistered: false,
   swUpdateReady: false,
+  swOfflineReady: false,
   swChecking: false,
   swVersion: null,
   offlineAssetCount: null,

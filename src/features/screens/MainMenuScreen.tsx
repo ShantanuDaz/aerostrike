@@ -76,7 +76,7 @@ export function MainMenuScreen({
   const updateRoomUrl = (code: string) => {
     try {
       const newUrl = `${window.location.origin}${window.location.pathname}?room=${code}`;
-      window.history.replaceState(null, '', newUrl);
+      window.history.replaceState(window.history.state, '', newUrl);
     } catch {
       // ignore restricted History API environments on mobile WebViews
     }
