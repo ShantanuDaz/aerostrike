@@ -28,6 +28,8 @@ export interface ShootEvent {
   originX: number;
   originY: number;
   aimAngle: number;
+  spreadOffsets?: number[];
+  speedScale?: number;
 }
 
 export interface DamageEvent {

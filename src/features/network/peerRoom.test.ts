@@ -523,9 +523,107 @@ describe('PeerNetworkManager 2-peer protocol, security, and cooldown sync', () =
     expect(useNetworkStore.getState().hostSignalLost).toBe(false);
     expect(useMapStore.getState().selectedMap.id).toBe('sky-citadel');
 
-    // Host socket drops -> triggers Host Signal Lost banner cleanly
+    // Socket drops -> triggers Host Signal Lost banner cleanly
     hostConn.close();
     expect(useNetworkStore.getState().hostSignalLost).toBe(true);
     expect(useNetworkStore.getState().hostDisconnectReason).toContain('dropped');
+  });
+
+  it('clears disconnected players from engineWorld on Cadets, blocks unverified peer_meta, and dedups duplicate start_match', () => {
+    const hostPeer = setupHost('GHOST6');
+    const connA = joinCadet(hostPeer, {
+      peerId: 'peer_a',
+      playerId: 'pilot_a',
+      callsign: 'Alpha',
+      team: 'red',
+    });
+
+    // Unverified peer cannot mutate peers or roster with peer_meta before join_request approval
+    const intruderConn = new MockDataConnection('peer_rogue');
+    hostPeer.emit('connection', intruderConn);
+    intruderConn.emit('data', {
+      kind: 'peer_meta',
+      senderId: 'peer_rogue',
+      payload: { callsign: 'FakeHost', team: 'red', isHost: true },
+    });
+    expect(useNetworkStore.getState().roster.peer_rogue).toBeUndefined();
+
+    // Verified peer cannot elevate itself to Host via peer_meta, but callsign updates cleanly
+    connA.emit('data', {
+      kind: 'peer_meta',
+      senderId: 'peer_a',
+      payload: { callsign: 'AlphaPrime', team: 'blue', isHost: true },
+    });
+    expect(useNetworkStore.getState().roster.pilot_a.isHost).toBe(false);
+    expect(useNetworkStore.getState().roster.pilot_a.callsign).toBe('AlphaPrime');
+    expect(useNetworkStore.getState().roster.pilot_a.team).toBe('blue');
+
+    // Simulate cadet remote entity existing in engineWorld when host announces offline roster
+    engineWorld.upsertRemoteTransform({
+      id: 'pilot_a',
+      team: 'blue',
+      x: 500,
+      y: 600,
+      vx: 0,
+      vy: 0,
+      aimAngle: 0,
+      health: 100,
+      isBoosting: false,
+      isDead: false,
+      carryingFlag: false,
+      isGrounded: true,
+      weaponType: 'rifle',
+    });
+    expect(engineWorld.remotePlayers.has('pilot_a')).toBe(true);
+
+    connA.close();
+    expect(engineWorld.remotePlayers.has('pilot_a')).toBe(false);
+
+    // Cadet verifies duplicate start_match with matching launchId only invokes callback once
+    manager.disconnect();
+    useAvatarStore.setState({
+      playerId: 'pilot_cadet_local',
+      avatar: makeAvatar('Cadet'),
+      isEnlisted: true,
+    });
+    let startCalls = 0;
+    let rematchCalls = 0;
+    manager.setOnStartMatch(() => {
+      startCalls += 1;
+    });
+    manager.setOnRematch(() => {
+      rematchCalls += 1;
+    });
+    manager.connect('DEDUP7', false);
+    const cadetPeer = mockRegistry.lastCreatedPeer!;
+    cadetPeer.emit('open', 'peer_cadet_dedup');
+    const hostConn = cadetPeer.outgoingConnections[0];
+
+    const startMsg = {
+      kind: 'match_control',
+      senderId: 'aerostrikeomegav2DEDUP7',
+      payload: {
+        type: 'start_match',
+        launchId: 'launch_123',
+        mapId: 'ctf-canyon-arena',
+      },
+    };
+    hostConn.emit('data', startMsg);
+    hostConn.emit('data', startMsg);
+    expect(startCalls).toBe(1);
+
+    // Rematch transitions Cadet cleanly back to active battle phase
+    useNetworkStore.getState().setGamePhase('staging');
+    hostConn.emit('data', {
+      kind: 'match_control',
+      senderId: 'aerostrikeomegav2DEDUP7',
+      payload: {
+        type: 'rematch',
+        launchId: 'rematch_456',
+        mapId: 'sky-citadel',
+      },
+    });
+    expect(rematchCalls).toBe(1);
+    expect(useNetworkStore.getState().gamePhase).toBe('in_game');
   });
 });

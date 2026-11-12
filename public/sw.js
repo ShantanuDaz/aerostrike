@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aerostrike-omega-v4';
+const CACHE_NAME = 'aerostrike-omega-v5';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -31,6 +31,7 @@ self.addEventListener('activate', (event) => {
           if (key !== CACHE_NAME) {
             return caches.delete(key);
           }
+          return undefined;
         })
       );
     })
@@ -60,19 +61,29 @@ self.addEventListener('fetch', (event) => {
         if (networkResponse && networkResponse.status === 200) {
           const clone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, clone);
+            cache.put(event.request, clone).catch(() => {});
           });
         }
         return networkResponse;
       })
-      .catch(() => {
-        return caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
+      .catch(async () => {
+        const cachedResponse = await caches.match(event.request);
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        const acceptsHtml =
+          event.request.mode === 'navigate' ||
+          event.request.headers.get('accept')?.includes('text/html');
+        if (acceptsHtml) {
+          const appShell = (await caches.match('/index.html')) || (await caches.match('/'));
+          if (appShell) {
+            return appShell;
           }
-          if (event.request.headers.get('accept')?.includes('text/html')) {
-            return caches.match('/index.html');
-          }
+        }
+        return new Response('Offline — Asset unavailable', {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: { 'Content-Type': 'text/plain' },
         });
       })
   );

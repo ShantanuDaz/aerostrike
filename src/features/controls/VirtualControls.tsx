@@ -4,6 +4,8 @@ import { useCombatStore } from '../combat/combatStore';
 import { WEAPONS } from '../combat/weaponsConfig';
 import { useSettingsStore } from '../settings/settingsStore';
 import { useIsTouchHUD } from './useIsTouchHUD';
+import { engineWorld } from '../game/engineWorld';
+import { isPointInRadarExclusion, shouldIgnoreSyntheticMouse } from './touchExclusion';
 import { Flame, RefreshCw, Wind } from 'lucide-react';
 
 interface VirtualControlsProps {
@@ -47,6 +49,11 @@ export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps
   const [isDashingDirect, setIsDashingDirect] = useState(false);
   const isBoostingDirectRef = useRef(false);
   const isDashingDirectRef = useRef(false);
+  const lastButtonTouchMsRef = useRef<{ weapon: number; dash: number; boost: number }>({
+    weapon: 0,
+    dash: 0,
+    boost: 0,
+  });
 
   const clearAimGraceTimer = useCallback(() => {
     if (aimGraceTimerRef.current !== null) {
@@ -130,9 +137,14 @@ export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps
           };
           setLeftOrigin({ startX: clientX, startY: clientY });
         }
-        // Right 50%: Aim & Fire Stick (excluding top-right Radar zone)
+        // Right 50%: Aim & Fire Stick (excluding live Minimap Radar widget zone)
         else if (clientX >= halfWidth && !rightTouchRef.current) {
-          if (clientX > window.innerWidth - 155 && clientY < 140) {
+          const mm = engineWorld.minimapTarget;
+          const mmRect =
+            mm.canvas && typeof mm.canvas.getBoundingClientRect === 'function'
+              ? mm.canvas.getBoundingClientRect()
+              : null;
+          if (isPointInRadarExclusion(clientX, clientY, window.innerWidth, mm, mmRect)) {
             continue;
           }
 
@@ -356,11 +368,13 @@ export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps
           type="button"
           onClick={(e) => {
             e.stopPropagation();
+            if (shouldIgnoreSyntheticMouse(lastButtonTouchMsRef.current.weapon)) return;
             onSwitchWeapon();
           }}
           onTouchStart={(e) => {
             e.preventDefault();
             e.stopPropagation();
+            lastButtonTouchMsRef.current.weapon = performance.now();
             onSwitchWeapon();
           }}
           className="w-14 h-12 sm:w-16 sm:h-14 bg-slate-950/75 hover:bg-slate-900 border border-cyan-500/50 backdrop-blur-md flex flex-col items-center justify-center text-cyan-200 clip-chamfer shadow-xl cursor-pointer active:scale-95 transition"
@@ -381,20 +395,29 @@ export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps
             onTouchStart={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              lastButtonTouchMsRef.current.dash = performance.now();
               handleDashStart();
             }}
             onTouchEnd={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              lastButtonTouchMsRef.current.dash = performance.now();
               handleDashEnd();
             }}
             onTouchCancel={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              lastButtonTouchMsRef.current.dash = performance.now();
               handleDashEnd();
             }}
-            onMouseDown={handleDashStart}
-            onMouseUp={handleDashEnd}
+            onMouseDown={() => {
+              if (shouldIgnoreSyntheticMouse(lastButtonTouchMsRef.current.dash)) return;
+              handleDashStart();
+            }}
+            onMouseUp={() => {
+              if (shouldIgnoreSyntheticMouse(lastButtonTouchMsRef.current.dash)) return;
+              handleDashEnd();
+            }}
             onMouseLeave={() => {
               if (isDashingDirectRef.current) handleDashEnd();
             }}
@@ -418,20 +441,29 @@ export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps
             onTouchStart={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              lastButtonTouchMsRef.current.boost = performance.now();
               handleBoostStart();
             }}
             onTouchEnd={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              lastButtonTouchMsRef.current.boost = performance.now();
               handleBoostEnd();
             }}
             onTouchCancel={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              lastButtonTouchMsRef.current.boost = performance.now();
               handleBoostEnd();
             }}
-            onMouseDown={handleBoostStart}
-            onMouseUp={handleBoostEnd}
+            onMouseDown={() => {
+              if (shouldIgnoreSyntheticMouse(lastButtonTouchMsRef.current.boost)) return;
+              handleBoostStart();
+            }}
+            onMouseUp={() => {
+              if (shouldIgnoreSyntheticMouse(lastButtonTouchMsRef.current.boost)) return;
+              handleBoostEnd();
+            }}
             onMouseLeave={() => {
               if (isBoostingDirectRef.current) handleBoostEnd();
             }}

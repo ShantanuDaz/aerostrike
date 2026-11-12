@@ -126,6 +126,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
       ? rosterInput
       : Object.values(rosterInput);
 
+    const prevRoster = get().roster;
     const rosterMap: Record<string, RosterMember> = {};
     for (const m of rawList) {
       const assignedSlot =
@@ -134,12 +135,21 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
           : allocateSlot(rosterMap, m.isHost);
       const normalized: RosterMember = { ...m, slot: assignedSlot };
       rosterMap[m.playerId] = normalized;
-      engineWorld.syncRemoteMetadata(
-        normalized.playerId,
-        normalized.team,
-        normalized.avatar,
-        assignedSlot,
-      );
+      if (!normalized.isOnline) {
+        engineWorld.removeRemotePlayer(normalized.playerId);
+      } else {
+        engineWorld.syncRemoteMetadata(
+          normalized.playerId,
+          normalized.team,
+          normalized.avatar,
+          assignedSlot,
+        );
+      }
+    }
+    for (const oldId of Object.keys(prevRoster)) {
+      if (!rosterMap[oldId]) {
+        engineWorld.removeRemotePlayer(oldId);
+      }
     }
     set({ roster: rosterMap });
   },
@@ -189,14 +199,23 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
         : keys.find((key) => roster[key].peerId === idOrCallsign) ??
           keys.find((key) => roster[key].callsign === idOrCallsign);
       if (targetId && roster[targetId]) {
-        const updated = { ...roster[targetId], ...patch };
+        const current = roster[targetId];
+        const nextAvatar =
+          patch.callsign && current.avatar
+            ? { ...current.avatar, callsign: patch.callsign }
+            : patch.avatar ?? current.avatar;
+        const updated: RosterMember = { ...current, ...patch, avatar: nextAvatar };
         roster[targetId] = updated;
-        engineWorld.syncRemoteMetadata(
-          updated.playerId,
-          updated.team,
-          updated.avatar,
-          updated.slot,
-        );
+        if (updated.isOnline === false) {
+          engineWorld.removeRemotePlayer(updated.playerId);
+        } else {
+          engineWorld.syncRemoteMetadata(
+            updated.playerId,
+            updated.team,
+            updated.avatar,
+            updated.slot,
+          );
+        }
         return { roster };
       }
       return state;

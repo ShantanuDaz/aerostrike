@@ -24,6 +24,7 @@ export interface SoloBot {
   lastDamagedBy?: {
     dealerId: string;
     weaponType: WeaponType;
+    atMs?: number;
   } | null;
   input: InputState;
 }

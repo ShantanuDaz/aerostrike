@@ -41,6 +41,7 @@ interface CTFState {
   winner: Team | null;
   bannerMessage: string | null;
   stateSeq: number;
+  matchGeneration: number;
   lastScorer: {
     playerId: string;
     callsign: string;
@@ -107,6 +108,7 @@ export const useCTFStore = create<CTFState>((set, get) => ({
   winner: null,
   bannerMessage: null,
   stateSeq: 0,
+  matchGeneration: 0,
   lastScorer: null,
 
   setMatchRules: (rules) => {
@@ -187,6 +189,7 @@ export const useCTFStore = create<CTFState>((set, get) => ({
       matchStatus: 'playing',
       bannerMessage: 'MATCH STARTED! CAPTURE THE ENEMY FLAG!',
       stateSeq: state.stateSeq + 1,
+      matchGeneration: state.matchGeneration + 1,
       lastScorer: null,
       flags: {
         blue: {
@@ -224,7 +227,7 @@ export const useCTFStore = create<CTFState>((set, get) => ({
       : get().matchRules;
     liveClockSec = rules.timeLimitSec;
 
-    set({
+    set((state) => ({
       score: { blue: 0, red: 0 },
       targetCaptures: rules.targetCaptures,
       matchRules: rules,
@@ -234,6 +237,7 @@ export const useCTFStore = create<CTFState>((set, get) => ({
       matchStatus: 'playing',
       bannerMessage: 'MATCH STARTED! CAPTURE THE ENEMY FLAG!',
       stateSeq: 0,
+      matchGeneration: state.matchGeneration + 1,
       lastScorer: null,
       flags: {
         blue: {
@@ -257,7 +261,7 @@ export const useCTFStore = create<CTFState>((set, get) => ({
           returnTimer: 0,
         },
       },
-    });
+    }));
     scheduleBannerClear((msg) => set({ bannerMessage: msg }), 2600);
   },
 

@@ -35,8 +35,6 @@ export function ConnectingScreen({
   const hostSignalLost = useNetworkStore((s) => s.hostSignalLost);
   const hostDisconnectReason = useNetworkStore((s) => s.hostDisconnectReason);
   const hostReconnectAttempts = useNetworkStore((s) => s.hostReconnectAttempts);
-  const peers = useNetworkStore((s) => s.peers);
-  const roster = useNetworkStore((s) => s.roster);
   const crtScanlines = useSettingsStore((s) => s.crtScanlines);
 
   const [stepIndex, setStepIndex] = useState(0);
@@ -48,13 +46,10 @@ export function ConnectingScreen({
     onConnectedRef.current = onConnected;
   }, [onConnected]);
 
-  // Derived connection state
-  const hasOtherMembers =
-    Object.keys(roster).length > 1 || Object.keys(peers).length > 0;
-
+  // Require Host authorization approval for Cadets (do not advance on raw open socket)
   const isReadyToTransition = Boolean(
     (isRoomCreator && isConnected) ||
-    (!isRoomCreator && (isAuthApproved || hasOtherMembers))
+    (!isRoomCreator && isAuthApproved)
   );
 
   const isFinishing = isReadyToTransition && !isJoinRejected;
@@ -63,7 +58,7 @@ export function ConnectingScreen({
     !isRoomCreator &&
     !isFinishing &&
     !isJoinRejected &&
-    (hostSignalLost || (elapsedSeconds >= 7 && !isAuthApproved && !hasOtherMembers));
+    (hostSignalLost || (elapsedSeconds >= 7 && !isAuthApproved));
 
   // Elapsed timer & progressive logs
   useEffect(() => {

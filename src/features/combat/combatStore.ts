@@ -44,7 +44,13 @@ interface CombatStore {
   grantWeaponPickup: (weapon: WeaponType) => void;
   cycleWeapon: () => void;
   setPickups: (pickups: ActiveWeaponPickup[]) => void;
-  fireWeapon: (params: FireWeaponParams) => { recoil: number; bulletsSpawned: Bullet[]; firedWeapon: WeaponType } | null;
+  fireWeapon: (params: FireWeaponParams) => {
+    recoil: number;
+    bulletsSpawned: Bullet[];
+    firedWeapon: WeaponType;
+    spreadOffsets: number[];
+    speedScale: number;
+  } | null;
   addBullets: (bullets: Bullet[]) => void;
   addParticles: (particles: Particle[]) => void;
 }
@@ -176,7 +182,10 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
 
     const muzzle = getSafeMuzzlePoint(originX, originY, aimAngle, 18, map);
     const spawned: Bullet[] = [];
+    const spreadOffsets: number[] = [];
     const spreadHalf = activeConfig.spread / 2;
+    const speedScale = 0.95 + Math.random() * 0.1;
+    const speed = activeConfig.speed * speedScale;
 
     for (let i = 0; i < activeConfig.pellets; i++) {
       const angleOffset =
@@ -184,8 +193,8 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
           ? -spreadHalf + (activeConfig.spread * i) / (activeConfig.pellets - 1)
           : (Math.random() - 0.5) * activeConfig.spread;
 
+      spreadOffsets.push(angleOffset);
       const bulletAngle = aimAngle + angleOffset;
-      const speed = activeConfig.speed * (0.95 + Math.random() * 0.1);
 
       spawned.push({
         id: `b_${shooterId}_${bulletIdCounter++}`,
@@ -209,6 +218,8 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
       recoil: activeConfig.recoil,
       bulletsSpawned: spawned,
       firedWeapon,
+      spreadOffsets,
+      speedScale,
     };
   },
 

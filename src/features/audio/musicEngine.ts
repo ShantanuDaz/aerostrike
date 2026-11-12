@@ -73,35 +73,50 @@ class MusicEngine {
   private isUnlocked: boolean = false;
   private isTabHidden: boolean = typeof document !== 'undefined' ? document.hidden : false;
   private gestureBound: boolean = false;
+  private gestureHandler: (() => void) | null = null;
 
   constructor() {
     this.bindLifecycleListeners();
   }
 
+  private removeGestureListeners() {
+    if (!this.gestureHandler || typeof window === 'undefined' || typeof window.removeEventListener !== 'function') {
+      return;
+    }
+    window.removeEventListener('pointerdown', this.gestureHandler);
+    window.removeEventListener('keydown', this.gestureHandler);
+    window.removeEventListener('touchstart', this.gestureHandler);
+    this.gestureHandler = null;
+  }
+
   private bindLifecycleListeners() {
-    if (typeof window === 'undefined' || this.gestureBound) return;
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function' || this.gestureBound) {
+      return;
+    }
     this.gestureBound = true;
 
-    const handleGesture = () => {
+    this.gestureHandler = () => {
       this.unlock();
     };
 
-    window.addEventListener('pointerdown', handleGesture, { passive: true });
-    window.addEventListener('keydown', handleGesture, { passive: true });
-    window.addEventListener('touchstart', handleGesture, { passive: true });
+    window.addEventListener('pointerdown', this.gestureHandler, { passive: true });
+    window.addEventListener('keydown', this.gestureHandler, { passive: true });
+    window.addEventListener('touchstart', this.gestureHandler, { passive: true });
 
-    document.addEventListener('visibilitychange', () => {
-      this.isTabHidden = document.hidden;
-      const ctx = sounds.getSharedContext(false);
-      if (!ctx || !this.musicMasterGain) return;
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('visibilitychange', () => {
+        this.isTabHidden = document.hidden;
+        const ctx = sounds.getSharedContext(false);
+        if (!ctx || !this.musicMasterGain) return;
 
-      if (this.isTabHidden) {
-        this.musicMasterGain.gain.setTargetAtTime(0, ctx.currentTime, 0.08);
-      } else {
-        this.syncGainNode();
-        this.nextNoteTime = ctx.currentTime + 0.08;
-      }
-    });
+        if (this.isTabHidden) {
+          this.musicMasterGain.gain.setTargetAtTime(0, ctx.currentTime, 0.08);
+        } else {
+          this.syncGainNode();
+          this.nextNoteTime = ctx.currentTime + 0.08;
+        }
+      });
+    }
   }
 
   private getEffectiveGain(): number {
@@ -146,16 +161,17 @@ class MusicEngine {
     const ctx = sounds.getSharedContext(true);
     if (!ctx) return;
 
-    if (ctx.state === 'suspended') {
-      void ctx.resume().then(() => {
-        this.ensureAudioGraph(ctx);
-        this.isUnlocked = true;
-        this.startSchedulerIfNeeded();
-      });
-    } else {
+    const finishUnlock = () => {
       this.ensureAudioGraph(ctx);
       this.isUnlocked = true;
+      this.removeGestureListeners();
       this.startSchedulerIfNeeded();
+    };
+
+    if (ctx.state === 'suspended') {
+      void ctx.resume().then(finishUnlock);
+    } else {
+      finishUnlock();
     }
   }
 

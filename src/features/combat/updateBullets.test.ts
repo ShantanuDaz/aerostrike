@@ -75,6 +75,27 @@ describe('updateBullets swept collision, muzzle safety, and splash', () => {
     expect(clearMuzzle.x).toBeCloseTo(118, 4);
   });
 
+  it('allows bullets, rockets, and muzzles to pass freely through one-way platforms while blocking walls and ground', () => {
+    const map = makeMap([
+      { x: 208, y: 392, width: 120, height: 14, type: 'platform' },
+      { x: 400, y: 392, width: 120, height: 30, type: 'ground' },
+    ]);
+
+    const muzzleThroughPlatform = getSafeMuzzlePoint(202, 400, 0, 18, map);
+    expect(muzzleThroughPlatform.x).toBeCloseTo(220, 4);
+
+    const shotThroughPlatform = makeBullet({ x: 195, y: 400, vx: 35 });
+    const enemyOnOtherSide = makeTarget({ x: 235, y: 400 });
+    const platformRes = updateBullets([shotThroughPlatform], map, [enemyOnOtherSide], 1 / 60);
+    expect(platformRes.hits).toHaveLength(1);
+
+    const groundBlocked = makeBullet({ id: 'b_ground', x: 390, y: 400, vx: 35 });
+    const enemyBehindGround = makeTarget({ id: 'enemy_red_2', x: 425, y: 400 });
+    const groundRes = updateBullets([groundBlocked], map, [enemyBehindGround], 1 / 60);
+    expect(groundRes.hits).toHaveLength(0);
+    expect(groundRes.activeBullets).toHaveLength(0);
+  });
+
   it('blocks bullets with solid walls before reaching hidden enemy', () => {
     const map = makeMap([{ x: 208, y: 350, width: 12, height: 100, type: 'wall' }]);
     const bullet = makeBullet({ x: 195, y: 400, vx: 35 });

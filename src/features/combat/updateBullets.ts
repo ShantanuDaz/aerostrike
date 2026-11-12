@@ -103,7 +103,7 @@ export function getSafeMuzzlePoint(
   let earliestT: number | null = null;
   for (let i = 0; i < map.obstacles.length; i++) {
     const obs = map.obstacles[i];
-    if (obs.type === 'hazard') continue;
+    if (obs.type !== 'wall' && obs.type !== 'ground') continue;
     const t = segmentRectHitT(
       originX,
       originY,
@@ -268,10 +268,10 @@ export function updateBullets(
     const endX = startX + bullet.vx * dtScale;
     const endY = startY + bullet.vy * dtScale;
 
-    // 1. Earliest obstacle hit along bullet path (ignore floor hazards)
+    // 1. Earliest solid obstacle hit along bullet path (ignore platforms and floor hazards)
     let earliestObsT: number | null = null;
     for (const obs of map.obstacles) {
-      if (obs.type === 'hazard') continue;
+      if (obs.type !== 'wall' && obs.type !== 'ground') continue;
       const t = segmentRectHitT(
         startX,
         startY,

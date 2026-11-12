@@ -9,11 +9,16 @@ import { useAvatarStore } from './features/avatar/avatarStore';
 import { usePlayerStore } from './features/player/playerStore';
 import { useCTFStore } from './features/ctf/ctfStore';
 import { useCombatStore } from './features/combat/combatStore';
+import { clearOptimisticClaims } from './features/combat/optimisticClaims';
 import { useMatchStatsStore } from './features/combat/statsStore';
 import { useSettingsStore, type SettingsTab } from './features/settings/settingsStore';
 import { sounds } from './features/audio/soundEngine';
 import { music } from './features/audio/musicEngine';
-import { isMobileDevice, requestMobileFullscreen } from './features/controls/mobileFullscreen';
+import {
+  isMobileDevice,
+  requestMobileFullscreen,
+  resetFullscreenDismissal,
+} from './features/controls/mobileFullscreen';
 import type { Team } from './features/ctf/types';
 
 const SettingsScreen = lazy(() =>
@@ -71,13 +76,14 @@ export const App = () => {
     return 'main_menu';
   });
 
-  // Mobile-only: keep the whole application in fullscreen from launch and across interactions
+  // Mobile-only: request fullscreen during active combat deployment (never hijack menus or trap manual exits)
   useEffect(() => {
-    if (!isMobileDevice()) return;
+    if (screen !== 'in_game' || !isMobileDevice()) return;
 
+    resetFullscreenDismissal();
     requestMobileFullscreen();
 
-    const ensureFullscreen = () => {
+    const tryEnterCombatFullscreen = () => {
       requestMobileFullscreen();
     };
 
@@ -87,16 +93,14 @@ export const App = () => {
       }
     };
 
-    window.addEventListener('touchend', ensureFullscreen, { capture: true, passive: true });
-    window.addEventListener('click', ensureFullscreen, { capture: true, passive: true });
+    window.addEventListener('touchend', tryEnterCombatFullscreen, { passive: true });
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      window.removeEventListener('touchend', ensureFullscreen, { capture: true });
-      window.removeEventListener('click', ensureFullscreen, { capture: true });
+      window.removeEventListener('touchend', tryEnterCombatFullscreen);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [screen]);
 
   // Adaptive procedural background music per screen & match state
   useEffect(() => {
@@ -162,6 +166,7 @@ export const App = () => {
     });
 
     networkManager.setOnRematch((mapId: string) => {
+      clearOptimisticClaims();
       const mapStore = useMapStore.getState();
       const targetMap = mapStore.availableMaps[mapId] ?? mapStore.selectedMap;
       mapStore.selectMap(mapId);
@@ -187,6 +192,7 @@ export const App = () => {
         stats.registerParticipant(m.playerId, m.callsign, m.team);
       }
       useCTFStore.getState().prepareClientArena(targetMap);
+      setScreen('in_game');
     });
   }, []);
 
@@ -224,12 +230,30 @@ export const App = () => {
   };
 
   const handleStartMatch = () => {
+    clearOptimisticClaims();
     const currentMap = useMapStore.getState().selectedMap;
-    useMatchStatsStore.getState().resetStats();
+    const stats = useMatchStatsStore.getState();
+    stats.resetStats();
     useCombatStore.getState().initLoadout(useSettingsStore.getState().defaultWeapon);
-    usePlayerStore.getState().spawnAtTeamBase(currentMap, useAvatarStore.getState().playerId);
+    const myId = useAvatarStore.getState().playerId;
+    usePlayerStore.getState().spawnAtTeamBase(currentMap, myId);
+    const localP = usePlayerStore.getState().player;
+    stats.registerParticipant(myId, localP.avatar.callsign, localP.team);
+
+    const net = useNetworkStore.getState();
+    if (net.roomCode) {
+      for (const m of Object.values(net.roster)) {
+        stats.registerParticipant(m.playerId, m.callsign, m.team);
+      }
+    }
+
     networkManager.setInActiveBattle(true);
-    initMatch(currentMap);
+    if (net.roomCode && !net.isHost) {
+      useCTFStore.getState().prepareClientArena(currentMap);
+      networkManager.requestRejoinSync();
+    } else {
+      initMatch(currentMap);
+    }
     setScreen('in_game');
   };
 

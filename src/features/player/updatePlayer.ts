@@ -34,6 +34,22 @@ const DASH_DURATION_SEC = 0.14;
 export const PLAYER_HALF_WIDTH = 14;
 export const PLAYER_HALF_HEIGHT = 25;
 
+function isStandingOnPlatform(x: number, y: number, map: GameMap): boolean {
+  const feetY = y + PLAYER_HALF_HEIGHT;
+  for (let i = 0; i < map.obstacles.length; i++) {
+    const obs = map.obstacles[i];
+    if (obs.type !== 'platform') continue;
+    if (
+      x + PLAYER_HALF_WIDTH > obs.x + 0.01 &&
+      x - PLAYER_HALF_WIDTH < obs.x + obs.width - 0.01 &&
+      Math.abs(feetY - obs.y) <= 4
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Updates player physics, jetpack, timers, and humanoid obstacle collisions.
  */
@@ -103,11 +119,11 @@ export function updatePlayer(
     invulnerableTimer = Math.max(0, invulnerableTimer - safeDt);
   }
 
-  // Platform drop-through intent
+  // Platform drop-through intent (only inject downward impulse when perched on a one-way platform)
   const wantsDropThrough = (input.moveY ?? 0) > 0.5;
   if (wantsDropThrough) {
     dropThroughTimer = 0.24;
-    if (wasGrounded && vy === 0) {
+    if (wasGrounded && vy === 0 && isStandingOnPlatform(x, y, map)) {
       vy = 1.4;
     }
   }
@@ -220,7 +236,7 @@ export function updatePlayer(
   let isGrounded = false;
 
   // 6. Separated Axis Obstacle Collisions (X pass then Y pass prevents corner snagging)
-  // 6a. Horizontal pass against solid walls/ground
+  // 6a. Horizontal pass against solid walls/ground using swept edge tests + penetration fallback
   for (const obs of map.obstacles) {
     if (obs.type !== 'wall' && obs.type !== 'ground') continue;
 
@@ -228,13 +244,35 @@ export function updatePlayer(
       continue;
     }
 
-    if (nextX + halfW > obs.x && nextX - halfW < obs.x + obs.width) {
-      if (x + halfW <= obs.x + 2) {
-        nextX = obs.x - halfW;
-        vx = 0;
-      } else if (x - halfW >= obs.x + obs.width - 2) {
-        nextX = obs.x + obs.width + halfW;
-        vx = 0;
+    const sweptRight = nextX > x && x + halfW <= obs.x + 4 && nextX + halfW > obs.x;
+    const sweptLeft =
+      nextX < x && x - halfW >= obs.x + obs.width - 4 && nextX - halfW < obs.x + obs.width;
+
+    if (sweptRight) {
+      const clamped = obs.x - halfW;
+      if (nextX > clamped) {
+        nextX = clamped;
+      }
+      if (vx > 0) vx = 0;
+    } else if (sweptLeft) {
+      const clamped = obs.x + obs.width + halfW;
+      if (nextX < clamped) {
+        nextX = clamped;
+      }
+      if (vx < 0) vx = 0;
+    } else if (nextX + halfW > obs.x && nextX - halfW < obs.x + obs.width) {
+      const pushLeft = nextX + halfW - obs.x;
+      const pushRight = obs.x + obs.width - (nextX - halfW);
+      const horizPen = Math.min(pushLeft, pushRight);
+      const vertPen = Math.min(y + halfH - obs.y, obs.y + obs.height - (y - halfH));
+      if (horizPen <= vertPen) {
+        if (pushLeft <= pushRight) {
+          nextX = obs.x - halfW;
+          if (vx > 0) vx = 0;
+        } else {
+          nextX = obs.x + obs.width + halfW;
+          if (vx < 0) vx = 0;
+        }
       }
     }
   }
@@ -256,17 +294,28 @@ export function updatePlayer(
     }
 
     if (obs.type === 'wall' || obs.type === 'ground') {
-      if (vy >= 0 && y + halfH <= obs.y + 2 && nextY + halfH >= obs.y) {
+      if (vy >= 0 && y + halfH <= obs.y + 6 && nextY + halfH >= obs.y) {
         nextY = obs.y - halfH;
         vy = 0;
         isGrounded = true;
       } else if (
         vy <= 0 &&
-        y - halfH >= obs.y + obs.height - 2 &&
+        y - halfH >= obs.y + obs.height - 6 &&
         nextY - halfH <= obs.y + obs.height
       ) {
         nextY = obs.y + obs.height + halfH;
         vy = 0;
+      } else if (nextY + halfH > obs.y && nextY - halfH < obs.y + obs.height) {
+        const pushUp = nextY + halfH - obs.y;
+        const pushDown = obs.y + obs.height - (nextY - halfH);
+        if (pushUp <= pushDown) {
+          nextY = obs.y - halfH;
+          if (vy > 0) vy = 0;
+          isGrounded = true;
+        } else {
+          nextY = obs.y + obs.height + halfH;
+          if (vy < 0) vy = 0;
+        }
       }
     } else {
       // Platform (One-way jump-through unless holding down / drop-through active)

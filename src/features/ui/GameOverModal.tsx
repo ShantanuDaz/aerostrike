@@ -4,6 +4,7 @@ import { useNetworkStore } from '../network/networkStore';
 import { networkManager } from '../network/peerRoom';
 import { usePlayerStore } from '../player/playerStore';
 import { useCombatStore } from '../combat/combatStore';
+import { clearOptimisticClaims } from '../combat/optimisticClaims';
 import { useMatchStatsStore } from '../combat/statsStore';
 import { useSettingsStore } from '../settings/settingsStore';
 import { useAvatarStore } from '../avatar/avatarStore';
@@ -42,6 +43,7 @@ export function GameOverModal({ onLeaveMatch }: GameOverModalProps) {
 
   const handlePlayAgain = () => {
     if (!canStartRematch) return;
+    clearOptimisticClaims();
     engineWorld.resetWorldForMatch(
       (selectedMap.weaponSpawns || []).map((ws) => ({
         id: ws.id,

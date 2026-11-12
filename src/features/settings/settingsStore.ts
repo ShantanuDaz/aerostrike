@@ -97,7 +97,7 @@ function syncAudioEngines(settings: GameSettings) {
     enabled: settings.musicEnabled,
     musicVolume: settings.musicVolume,
     masterVolume: settings.masterVolume,
-    muted: settings.sfxMuted,
+    muted: false,
   });
 }
 

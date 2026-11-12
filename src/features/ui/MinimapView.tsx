@@ -85,13 +85,15 @@ export function MinimapView({ map }: MinimapViewProps) {
               isLocal: true,
               hasFlag: local.carryingFlag,
             },
-            ...Array.from(engineWorld.remotePlayers.values()).map((rp) => ({
-              x: rp.renderX,
-              y: rp.renderY,
-              team: rp.team,
-              isLocal: false,
-              hasFlag: rp.carryingFlag,
-            })),
+            ...Array.from(engineWorld.remotePlayers.values())
+              .filter((rp) => !rp.isDead)
+              .map((rp) => ({
+                x: rp.renderX,
+                y: rp.renderY,
+                team: rp.team,
+                isLocal: false,
+                hasFlag: rp.carryingFlag,
+              })),
           ],
           [
             { x: flags.blue.x, y: flags.blue.y, team: 'blue' },

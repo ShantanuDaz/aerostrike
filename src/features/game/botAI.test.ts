@@ -1,0 +1,123 @@
+import { describe, expect, it } from 'vitest';
+import { createSoloBotSquad, stepSoloBots } from './botAI';
+import type { GameMap } from '../map/types';
+import type { Flag, Team } from '../ctf/types';
+import type { Player } from '../player/types';
+
+function createBotTestMap(): GameMap {
+  return {
+    id: 'bot-test-map',
+    name: 'Bot Test Map',
+    width: 1600,
+    height: 1000,
+    backgroundColor: '#060913',
+    baseBlue: { x: 40, y: 700, width: 180, height: 150 },
+    baseRed: { x: 1380, y: 700, width: 180, height: 150 },
+    flagBlue: { x: 120, y: 830 },
+    flagRed: { x: 1480, y: 830 },
+    spawnPointsBlue: [{ x: 160, y: 820 }],
+    spawnPointsRed: [{ x: 1440, y: 820 }],
+    weaponSpawns: [],
+    obstacles: [
+      { x: 0, y: 860, width: 1600, height: 140, type: 'ground' },
+    ],
+  };
+}
+
+function createFlags(map: GameMap): Record<Team, Flag> {
+  return {
+    blue: {
+      team: 'blue',
+      status: 'at_base',
+      x: map.flagBlue.x,
+      y: map.flagBlue.y,
+      baseX: map.flagBlue.x,
+      baseY: map.flagBlue.y,
+      carrierId: null,
+      returnTimer: 0,
+    },
+    red: {
+      team: 'red',
+      status: 'at_base',
+      x: map.flagRed.x,
+      y: map.flagRed.y,
+      baseX: map.flagRed.x,
+      baseY: map.flagRed.y,
+      carrierId: null,
+      returnTimer: 0,
+    },
+  };
+}
+
+describe('Solo AI Squad formation, firing, and hazard/CTF reporting', () => {
+  it('spawns a balanced 2v2 squad relative to local player team', () => {
+    const map = createBotTestMap();
+    const bots = createSoloBotSquad(map, 'blue');
+    expect(bots).toHaveLength(3);
+    expect(bots.filter((b) => b.team === 'blue')).toHaveLength(1);
+    expect(bots.filter((b) => b.team === 'red')).toHaveLength(2);
+  });
+
+  it('detects newly dead bots from hazards, reports dropped flags, and clears lastDamagedBy after respawn', () => {
+    const map = createBotTestMap();
+    map.obstacles.push({ x: 740, y: 830, width: 120, height: 30, type: 'hazard' });
+
+    const bots = createSoloBotSquad(map, 'blue');
+    const redBot = bots.find((b) => b.team === 'red')!;
+    redBot.player = {
+      ...redBot.player,
+      x: 800,
+      y: 840,
+      carryingFlag: true,
+    };
+    redBot.lastDamagedBy = {
+      dealerId: 'local_1',
+      weaponType: 'rocket',
+      atMs: 1000,
+    };
+
+    const localPlayer: Player = {
+      ...bots[0].player,
+      id: 'local_1',
+      team: 'blue',
+      x: 200,
+      y: 830,
+    };
+
+    const step1 = stepSoloBots({
+      bots,
+      localPlayer,
+      map,
+      flags: createFlags(map),
+      matchStatus: 'playing',
+      pickups: [],
+      respawnDelaySec: 0.2,
+      nowMs: 1200,
+      dt: 1 / 60,
+    });
+
+    expect(step1.newlyDeadBots).toHaveLength(1);
+    expect(step1.newlyDeadBots[0].bot.id).toBe(redBot.id);
+    expect(step1.newlyDeadBots[0].droppedFlagTeam).toBe('blue');
+    expect(redBot.player.isDead).toBe(true);
+
+    // Move hazard away from spawn so bot respawns safely and resets lastDamagedBy
+    map.obstacles.pop();
+    for (let i = 0; i < 15 && redBot.player.isDead; i++) {
+      stepSoloBots({
+        bots,
+        localPlayer,
+        map,
+        flags: createFlags(map),
+        matchStatus: 'playing',
+        pickups: [],
+        respawnDelaySec: 0.2,
+        nowMs: 1500 + i * 50,
+        dt: 0.05,
+      });
+    }
+
+    expect(redBot.player.isDead).toBe(false);
+    expect(redBot.lastDamagedBy).toBeNull();
+  });
+});

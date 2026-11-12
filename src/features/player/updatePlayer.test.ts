@@ -125,6 +125,56 @@ describe('updatePlayer physics and collision', () => {
     }
     expect(player.y).toBeLessThanOrEqual(860 - PLAYER_HALF_HEIGHT + 0.01);
     expect(player.isGrounded).toBe(true);
+    expect(player.vy).toBe(0);
+  });
+
+  it('prevents high-speed dash tunneling through narrow solid walls and pushes out deep overlaps', () => {
+    const map = createTestMap({
+      obstacles: [
+        { x: 0, y: 860, width: 1600, height: 140, type: 'ground' },
+        { x: 500, y: 650, width: 12, height: 210, type: 'wall' },
+      ],
+    });
+
+    // At dt = 0.05 (dtScale = 3), dash displacement exceeds 28px and would clear a 12px wall without sweep
+    const preDash = createTestPlayer({
+      x: 500 - PLAYER_HALF_WIDTH - 2,
+      y: 780,
+      isGrounded: false,
+      boostFuel: 100,
+    });
+    const postDash = updatePlayer(
+      preDash,
+      { ...IDLE_INPUT, moveX: 1, dash: true },
+      map,
+      0.05,
+      true,
+    );
+    expect(postDash.x).toBeLessThanOrEqual(500 - PLAYER_HALF_WIDTH + 0.001);
+    expect(postDash.vx).toBe(0);
+
+    // Overlapping past the old 2px edge threshold still resolves cleanly out of the wall
+    const overlapped = createTestPlayer({
+      x: 500 - PLAYER_HALF_WIDTH + 5,
+      y: 780,
+      vx: 2,
+      isGrounded: false,
+    });
+    const resolved = updatePlayer(overlapped, IDLE_INPUT, map, 1 / 60, true);
+    expect(resolved.x).toBeLessThanOrEqual(500 - PLAYER_HALF_WIDTH + 0.001);
+
+    // Shallow vertical overlap into a wide ground floor pushes upward onto floor, never teleporting horizontally
+    const sunkOnFloor = createTestPlayer({
+      x: 800,
+      y: 860 - PLAYER_HALF_HEIGHT + 6,
+      vx: 0,
+      vy: 0,
+      isGrounded: true,
+    });
+    const lifted = updatePlayer(sunkOnFloor, IDLE_INPUT, map, 1 / 60, true);
+    expect(lifted.x).toBeCloseTo(800, 3);
+    expect(lifted.y).toBeCloseTo(860 - PLAYER_HALF_HEIGHT, 2);
+    expect(lifted.isGrounded).toBe(true);
   });
 
   it('enforces jetpack fuel overheat hysteresis and 1.15x flag-carrier drain penalty', () => {

@@ -108,6 +108,9 @@ describe('useCombatStore ammo isolation and firing', () => {
 
     expect(first).not.toBeNull();
     expect(first!.bulletsSpawned).toHaveLength(WEAPONS.shotgun.pellets);
+    expect(first!.spreadOffsets).toHaveLength(WEAPONS.shotgun.pellets);
+    expect(first!.speedScale).toBeGreaterThanOrEqual(0.95);
+    expect(first!.speedScale).toBeLessThanOrEqual(1.05);
     // Clamped before wall at x=510
     expect(first!.bulletsSpawned[0].x).toBeLessThan(510);
     expect(engineWorld.bullets).toHaveLength(WEAPONS.shotgun.pellets);
