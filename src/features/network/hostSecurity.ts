@@ -10,12 +10,22 @@ import type {
   ShootEvent,
 } from './types';
 import {
+  CHAT_RATE_WINDOW_MS,
   DAMAGE_RATE_WINDOW_MS,
   FLAG_INTERACT_RADIUS_PX,
+  MAX_CHAT_MESSAGES_PER_WINDOW,
   MAX_DAMAGE_PACKETS_PER_SEC,
   MAX_DAMAGE_PER_TARGET_PAIR_SEC,
   type AuthoritativeActorPosition,
 } from './wireTypes';
+import {
+  MAX_CHAT_EMOJI_LENGTH,
+  MAX_CHAT_TEXT_LENGTH,
+  type ChatMessage,
+  type ChatWirePayload,
+  type VoiceStatePayload,
+} from '../comms/types';
+import { stripControlChars } from '../comms/chatStore';
 
 export class DamageRateTracker {
   private dealerBudget = new Map<string, { windowStartMs: number; packetCount: number }>();
@@ -480,4 +490,83 @@ export function validateFlagEvent(
     default:
       return null;
   }
+}
+
+export class ChatRateTracker {
+  private senderBudget = new Map<string, { windowStartMs: number; count: number }>();
+
+  public clear() {
+    this.senderBudget.clear();
+  }
+
+  public checkAndRecord(senderKey: string, nowMs: number = performance.now()): boolean {
+    const bucket = this.senderBudget.get(senderKey);
+    if (!bucket || nowMs - bucket.windowStartMs >= CHAT_RATE_WINDOW_MS) {
+      this.senderBudget.set(senderKey, { windowStartMs: nowMs, count: 1 });
+      return true;
+    }
+    if (bucket.count + 1 > MAX_CHAT_MESSAGES_PER_WINDOW) {
+      console.warn(`[Host Security] Rate-limited chat spam from "${senderKey}"`);
+      return false;
+    }
+    bucket.count += 1;
+    return true;
+  }
+}
+
+export function validateIncomingChat(
+  payload: unknown,
+  senderPeerId: string,
+  senderMember: RosterMember | undefined,
+  rateTracker?: ChatRateTracker,
+  nowMs: number = performance.now(),
+): ChatMessage | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const raw = payload as Partial<ChatWirePayload>;
+  if (typeof raw.id !== 'string' || !raw.id.trim()) return null;
+  if (raw.kind !== 'text' && raw.kind !== 'emoji') return null;
+  if (typeof raw.text !== 'string') return null;
+
+  const limit = raw.kind === 'emoji' ? MAX_CHAT_EMOJI_LENGTH : MAX_CHAT_TEXT_LENGTH;
+  const cleanedText = stripControlChars(raw.text).trim().slice(0, limit);
+  if (!cleanedText) return null;
+
+  const canonicalSenderId = senderMember?.playerId || raw.senderId || senderPeerId;
+  if (!canonicalSenderId) return null;
+
+  if (rateTracker && !rateTracker.checkAndRecord(canonicalSenderId, nowMs)) {
+    return null;
+  }
+
+  return {
+    id: raw.id.trim().slice(0, 64),
+    senderId: canonicalSenderId,
+    senderCallsign:
+      senderMember?.callsign ||
+      (typeof raw.senderCallsign === 'string' && raw.senderCallsign.trim().slice(0, 20)) ||
+      'PILOT',
+    senderTeam: senderMember?.team || (raw.senderTeam === 'red' ? 'red' : 'blue'),
+    kind: raw.kind,
+    text: cleanedText,
+    createdAtMs: Date.now(),
+  };
+}
+
+export function validateIncomingVoiceState(
+  payload: unknown,
+  senderPeerId: string,
+  senderMember: RosterMember | undefined,
+): VoiceStatePayload | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const raw = payload as Partial<VoiceStatePayload>;
+  if (typeof raw.micEnabled !== 'boolean') return null;
+  const canonicalPlayerId = senderMember?.playerId || raw.playerId;
+  const canonicalPeerId = senderMember?.peerId || senderPeerId || raw.peerId;
+  if (!canonicalPlayerId || !canonicalPeerId) return null;
+
+  return {
+    playerId: canonicalPlayerId,
+    peerId: canonicalPeerId,
+    micEnabled: raw.micEnabled,
+  };
 }

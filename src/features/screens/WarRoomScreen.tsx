@@ -9,6 +9,7 @@ import { sounds } from "../audio/soundEngine";
 import { useCTFStore } from "../ctf/ctfStore";
 import type { MatchRulesConfig, Team } from "../ctf/types";
 import { RoomQRCodeModal } from "../ui/RoomQRCodeModal";
+import { VoiceMicButton, WarRoomCommsPanel } from "../comms/CommsPanel";
 import { DropBayStageCanvas } from "./warRoom/DropBayStageCanvas";
 import { MapSchematicPreview } from "./warRoom/MapSchematicPreview";
 import {
@@ -335,6 +336,8 @@ export function WarRoomScreen({
                     <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
                   )}
                 </button>
+
+                <VoiceMicButton />
               </div>
             </header>
 
@@ -461,7 +464,12 @@ export function WarRoomScreen({
           </div>
 
           {/* CENTER STAGE SPACER */}
-          <div className="flex-1 min-h-[72px] short:min-h-[36px] sm:tall:min-h-[140px] pointer-events-none" />
+          <div className="flex-1 min-h-[48px] short:min-h-[24px] sm:tall:min-h-[100px] pointer-events-none" />
+
+          {/* SQUAD COMMS (TEXT, QUICK EMOJIS & VOICE STATUS) */}
+          <div className="w-full flex justify-start">
+            <WarRoomCommsPanel />
+          </div>
 
           {/* BOTTOM DOCK */}
           <footer className="w-full flex flex-col short-wide:flex-row sm:flex-row short-wide:items-end sm:items-end justify-between gap-2 sm:gap-3 pointer-events-auto">

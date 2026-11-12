@@ -17,6 +17,8 @@ import { useMapStore } from '../map/mapStore';
 import { useMatchStatsStore } from '../combat/statsStore';
 import { useNetworkStore } from './networkStore';
 import { usePlayerStore } from '../player/playerStore';
+import { sanitizeLocalChatInput, useChatStore } from '../comms/chatStore';
+import type { ChatKind, ChatMessage } from '../comms/types';
 
 export type SendToNetworkFn = (msg: WireMessage, excludePeerId?: string) => void;
 export type SendToHostFn = (msg: WireMessage) => void;
@@ -328,5 +330,57 @@ export function sendRulesChangeBroadcast(
     kind: 'room_auth',
     senderId: session.selfPeerId || 'host',
     payload: beacon,
+  });
+}
+
+export function sendChatBroadcast(
+  session: PeerTransportSession,
+  sendToNetwork: SendToNetworkFn,
+  kind: ChatKind,
+  rawText: string,
+): ChatMessage | null {
+  const cleaned = sanitizeLocalChatInput(rawText, kind);
+  if (!cleaned) return null;
+
+  const avatarStore = useAvatarStore.getState();
+  const playerStore = usePlayerStore.getState();
+  const nowMs = Date.now();
+  const msg: ChatMessage = {
+    id: `chat_${avatarStore.playerId}_${nowMs}_${Math.random().toString(36).slice(2, 6)}`,
+    senderId: avatarStore.playerId,
+    senderCallsign: avatarStore.avatar.callsign,
+    senderTeam: playerStore.player.team,
+    kind,
+    text: cleaned,
+    createdAtMs: nowMs,
+  };
+
+  useChatStore.getState().appendMessage(msg, false);
+
+  if (session.peer && !session.peer.destroyed) {
+    sendToNetwork({
+      kind: 'chat',
+      senderId: session.selfPeerId || avatarStore.playerId,
+      payload: msg,
+    });
+  }
+  return msg;
+}
+
+export function sendVoiceStateBroadcast(
+  session: PeerTransportSession,
+  sendToNetwork: SendToNetworkFn,
+  micEnabled: boolean,
+) {
+  if (!session.peer || session.peer.destroyed) return;
+  const myPlayerId = useAvatarStore.getState().playerId;
+  sendToNetwork({
+    kind: 'voice_state',
+    senderId: session.selfPeerId || myPlayerId,
+    payload: {
+      playerId: myPlayerId,
+      peerId: session.selfPeerId || myPlayerId,
+      micEnabled,
+    },
   });
 }

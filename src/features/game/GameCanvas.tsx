@@ -30,6 +30,7 @@ import { useIsTouchHUD } from '../controls/useIsTouchHUD';
 import { hapticShot } from '../controls/haptics';
 import { sounds } from '../audio/soundEngine';
 import { useSettingsStore } from '../settings/settingsStore';
+import { useChatStore } from '../comms/chatStore';
 import { buildActiveStations, engineWorld } from './engineWorld';
 import { createArenaRenderScratch, renderArenaFrame } from './arenaRenderer';
 import { createArenaSimState, stepArenaFrame } from './arenaSimulation';
@@ -318,7 +319,22 @@ export function GameCanvas({ map }: GameCanvasProps) {
         return;
       }
 
+      if ((e.code === 'Enter' || e.code === 'KeyT') && !e.repeat) {
+        const chatState = useChatStore.getState();
+        if (!chatState.isHudChatOpen) {
+          e.preventDefault();
+          clearAllInputs();
+          chatState.setHudChatOpen(true);
+          return;
+        }
+      }
+
       if (e.code === 'Escape' && !e.repeat) {
+        const chatState = useChatStore.getState();
+        if (chatState.isHudChatOpen) {
+          chatState.setHudChatOpen(false);
+          return;
+        }
         const stats = useMatchStatsStore.getState();
         const nextOpen = !stats.tacticalMenuOpen;
         if (nextOpen) {
@@ -383,6 +399,7 @@ export function GameCanvas({ map }: GameCanvasProps) {
     };
 
     const handleMouseDown = (e: MouseEvent) => {
+      if (useChatStore.getState().isInputFocused) return;
       const isMultiplayer = Boolean(useNetworkStore.getState().roomCode);
       if (!isMultiplayer && useMatchStatsStore.getState().tacticalMenuOpen) return;
       if (e.button === 0 && useCTFStore.getState().matchStatus === 'playing') {

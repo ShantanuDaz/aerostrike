@@ -7,6 +7,7 @@ import { useSettingsStore } from '../settings/settingsStore';
 import { useCTFStore } from '../ctf/ctfStore';
 import { useMatchStatsStore } from '../combat/statsStore';
 import { useNetworkStore } from '../network/networkStore';
+import { useChatStore } from '../comms/chatStore';
 import { sounds } from '../audio/soundEngine';
 import { useIsTouchHUD } from './useIsTouchHUD';
 import { engineWorld } from '../game/engineWorld';
@@ -178,6 +179,7 @@ export function VirtualControls({ onFire, onSwitchWeapon }: VirtualControlsProps
   const handleTouchStart = useCallback(
     (e: TouchEvent) => {
       if (!isTouchHUD) return;
+      if (useChatStore.getState().isInputFocused) return;
       if (useCTFStore.getState().matchStatus !== 'playing') return;
       const isMultiplayer = Boolean(useNetworkStore.getState().roomCode);
       if (!isMultiplayer && useMatchStatsStore.getState().tacticalMenuOpen) return;

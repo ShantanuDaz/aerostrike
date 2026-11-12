@@ -1,4 +1,4 @@
-import Peer, { type DataConnection } from 'peerjs';
+import Peer, { type DataConnection, type MediaConnection } from 'peerjs';
 import type {
   DamageEvent,
   FlagSyncEvent,
@@ -23,10 +23,11 @@ import {
   toHostPeerId,
   type WireMessage,
 } from './wireTypes';
-import { DamageRateTracker } from './hostSecurity';
+import { ChatRateTracker, DamageRateTracker } from './hostSecurity';
 import { FastSyncController, type FastSyncTransportCallbacks } from './fastSyncController';
 import {
   sendAvatarChangeBroadcast,
+  sendChatBroadcast,
   sendDamageEvent,
   sendFlagSyncEvent,
   sendKillFeedEvent,
@@ -38,7 +39,11 @@ import {
   sendShootEvent,
   sendStationCollectedEvent,
   sendTeamChangeBroadcast,
+  sendVoiceStateBroadcast,
 } from './peerBroadcasts';
+import { useChatStore } from '../comms/chatStore';
+import { voiceManager } from '../comms/voiceManager';
+import type { ChatKind, ChatMessage } from '../comms/types';
 import {
   dialHostPeer,
   dropFlagHeldByPlayer,
@@ -73,6 +78,7 @@ export class PeerNetworkManager {
   };
 
   private readonly damageRateTracker = new DamageRateTracker();
+  private readonly chatRateTracker = new ChatRateTracker();
   private readonly fastSync = new FastSyncController();
 
   private remoteBulletCounter = 0;
@@ -143,6 +149,7 @@ export class PeerNetworkManager {
     this.session.lastHostTrafficMs = 0;
     this.session.lastCadetWatchdogTickMs = 0;
     this.damageRateTracker.clear();
+    this.chatRateTracker.clear();
     clearOptimisticClaims();
   }
 
@@ -193,6 +200,7 @@ export class PeerNetworkManager {
       fastSync: this.fastSync,
       fastTransportCallbacks: this.fastTransportCallbacks,
       damageRateTracker: this.damageRateTracker,
+      chatRateTracker: this.chatRateTracker,
       findMemberByPeerId,
       findMemberByIdOrPeer,
       getClientConnections: () => this.session.clientConnections.entries(),
@@ -293,6 +301,26 @@ export class PeerNetworkManager {
 
       this.session.peer = isCreator ? new Peer(hostPeerId, peerConfig) : new Peer(peerConfig);
 
+      voiceManager.attachBridge({
+        getPeer: () => this.session.peer,
+        getSelfPeerId: () => this.session.selfPeerId,
+        isRoomConnected: () =>
+          !this.session.isConnectingOrDestroyed && Boolean(this.session.peer && !this.session.peer.destroyed),
+        broadcastVoiceState: (micEnabled) => this.broadcastVoiceState(micEnabled),
+      });
+
+      this.session.peer.on('call', (incomingCall: MediaConnection) => {
+        if (this.session.isConnectingOrDestroyed) {
+          try {
+            incomingCall.close();
+          } catch {
+            // ignore
+          }
+          return;
+        }
+        voiceManager.handleIncomingCall(incomingCall);
+      });
+
       this.session.peer.on('open', (assignedId: string) => {
         if (this.session.isConnectingOrDestroyed) return;
         console.log(`[PeerJS] Signaling open. Self Peer ID: "${assignedId}"`);
@@ -303,6 +331,7 @@ export class PeerNetworkManager {
           peerId: assignedId,
           isOnline: true,
         });
+        voiceManager.reconcileOutgoingCalls();
 
         if (!isCreator) {
           this.dialHost();
@@ -521,6 +550,14 @@ export class PeerNetworkManager {
     sendRulesChangeBroadcast(this.session, (msg, exclude) => this.sendToNetwork(msg, exclude), rules);
   }
 
+  public broadcastChat(kind: ChatKind, text: string): ChatMessage | null {
+    return sendChatBroadcast(this.session, (msg, exclude) => this.sendToNetwork(msg, exclude), kind, text);
+  }
+
+  public broadcastVoiceState(micEnabled: boolean) {
+    sendVoiceStateBroadcast(this.session, (msg, exclude) => this.sendToNetwork(msg, exclude), micEnabled);
+  }
+
   public requestRejoinSync() {
     if (this.session.isHostRole || !this.session.hostConn?.open) return;
     const myPlayerId = useAvatarStore.getState().playerId;
@@ -691,6 +728,8 @@ export class PeerNetworkManager {
     }
 
     this.fastSync.closeAllChannels();
+    voiceManager.shutdown();
+    useChatStore.getState().clearChat();
 
     for (const conn of this.session.clientConnections.values()) {
       try {

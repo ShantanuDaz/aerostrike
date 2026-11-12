@@ -16,6 +16,8 @@ import { renderBullets, renderParticles, renderWeaponPickups, useCombatStore } f
 import { WEAPONS } from '../combat/weaponsConfig';
 import { renderFlags, useCTFStore } from '../ctf';
 import { useSettingsStore } from '../settings/settingsStore';
+import { useChatStore } from '../comms/chatStore';
+import { useVoiceStore } from '../comms/voiceStore';
 import { engineWorld } from './engineWorld';
 
 export interface ArenaRenderScratch {
@@ -363,6 +365,97 @@ export function renderArenaFrame(params: RenderArenaFrameParams) {
     zoom,
     settings.highContrastTeamMarkers,
   );
+
+  // Floating comms bubbles (emojis / short chat callouts) & voice speaking indicator
+  const nowMs = Date.now();
+  const chatBubbles = useChatStore.getState().bubblesByPlayerId;
+  const voiceState = useVoiceStore.getState();
+
+  const drawCommsOverhead = (
+    worldX: number,
+    worldY: number,
+    playerId: string,
+    isSpeaking: boolean,
+  ) => {
+    const bubble = chatBubbles[playerId];
+    const hasBubble = Boolean(bubble && bubble.expiresAtMs > nowMs);
+    if (!hasBubble && !isSpeaking) return;
+
+    ctx.save();
+    ctx.translate(worldX, worldY - 46);
+    const invScale = zoom < 0.9 ? Math.min(1.4, 0.96 / Math.max(0.55, zoom)) : 1;
+    if (invScale !== 1) {
+      ctx.scale(invScale, invScale);
+    }
+
+    if (isSpeaking) {
+      const pulse = 0.65 + 0.35 * Math.sin(timeSec * 10);
+      ctx.fillStyle = `rgba(16, 185, 129, ${0.22 * pulse})`;
+      ctx.strokeStyle = `rgba(52, 211, 153, ${0.9 * pulse})`;
+      ctx.lineWidth = 1.6;
+      const micY = hasBubble ? -26 : 0;
+      ctx.beginPath();
+      ctx.arc(0, micY, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#34d399';
+      ctx.fillRect(-1.5, micY - 3, 3, 5);
+      ctx.fillRect(-3, micY + 2, 6, 1.5);
+    }
+
+    if (hasBubble && bubble) {
+      const remaining = Math.max(0, bubble.expiresAtMs - nowMs);
+      const alpha = remaining < 500 ? remaining / 500 : 1;
+      ctx.globalAlpha = alpha;
+
+      if (bubble.kind === 'emoji') {
+        ctx.font = '20px system-ui, Apple Color Emoji, Segoe UI Emoji, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(6, 9, 19, 0.78)';
+        ctx.strokeStyle =
+          bubble.senderTeam === 'blue' ? 'rgba(34, 211, 238, 0.75)' : 'rgba(251, 113, 133, 0.75)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(-17, -14, 34, 28, 7);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillText(bubble.text, 0, 1);
+      } else {
+        const label = bubble.text.length > 26 ? `${bubble.text.slice(0, 25)}…` : bubble.text;
+        ctx.font = 'bold 10px ui-monospace, SFMono-Regular, Menlo, monospace';
+        const textW = Math.min(180, ctx.measureText(label).width + 14);
+        ctx.fillStyle = 'rgba(6, 9, 19, 0.85)';
+        ctx.strokeStyle =
+          bubble.senderTeam === 'blue' ? 'rgba(34, 211, 238, 0.7)' : 'rgba(251, 113, 133, 0.7)';
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.roundRect(-textW / 2, -11, textW, 22, 5);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#f8fafc';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, 0, 0);
+      }
+    }
+
+    ctx.restore();
+  };
+
+  if (!localPlayer.isDead) {
+    drawCommsOverhead(localPlayer.x, localPlayer.y, myPlayerId, voiceState.isLocalSpeaking);
+  }
+  for (const rp of engineWorld.remotePlayers.values()) {
+    if (rp.isDead) continue;
+    drawCommsOverhead(
+      rp.renderX,
+      rp.renderY,
+      rp.id,
+      Boolean(voiceState.remoteSpeakingByPlayerId[rp.id]),
+    );
+  }
 
   if (engineWorld.floatingTexts.length > 0) {
     ctx.save();

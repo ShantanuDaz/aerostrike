@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { WeaponType } from '../combat/types';
 import { sounds } from '../audio/soundEngine';
 import { music } from '../audio/musicEngine';
+import { voiceManager } from '../comms/voiceManager';
 import { DEFAULT_CAMERA_ZOOM, clampCameraZoom } from '../camera/cameraMath';
 
 export type DefaultRadarMode = 'compact' | 'expanded' | 'hidden';
@@ -16,6 +17,8 @@ export interface GameSettings {
   sfxMuted: boolean;
   musicEnabled: boolean;
   musicVolume: number;
+  voiceVolume: number;
+  voiceMuted: boolean;
   jetpackAudio: boolean;
   crtScanlines: boolean;
   screenShake: boolean;
@@ -40,6 +43,8 @@ export const DEFAULT_SETTINGS: GameSettings = {
   sfxMuted: false,
   musicEnabled: true,
   musicVolume: 55,
+  voiceVolume: 90,
+  voiceMuted: false,
   jetpackAudio: true,
   crtScanlines: true,
   screenShake: true,
@@ -86,6 +91,14 @@ function loadStoredSettings(): GameSettings {
         typeof parsed.musicVolume === 'number'
           ? Math.max(0, Math.min(100, parsed.musicVolume))
           : DEFAULT_SETTINGS.musicVolume,
+      voiceVolume:
+        typeof parsed.voiceVolume === 'number'
+          ? Math.max(0, Math.min(100, parsed.voiceVolume))
+          : DEFAULT_SETTINGS.voiceVolume,
+      voiceMuted:
+        typeof parsed.voiceMuted === 'boolean'
+          ? parsed.voiceMuted
+          : DEFAULT_SETTINGS.voiceMuted,
       jetpackAudio:
         typeof parsed.jetpackAudio === 'boolean'
           ? parsed.jetpackAudio
@@ -158,6 +171,10 @@ function syncAudioEngines(settings: GameSettings) {
     masterVolume: settings.masterVolume,
     muted: false,
   });
+  voiceManager.applyVoiceSettings({
+    voiceVolume: settings.voiceVolume,
+    voiceMuted: settings.voiceMuted,
+  });
 }
 
 function persistSettings(next: GameSettings) {
@@ -188,6 +205,11 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         sfxMuted: patch.sfxMuted ?? state.sfxMuted,
         musicEnabled: patch.musicEnabled ?? state.musicEnabled,
         musicVolume: patch.musicVolume ?? state.musicVolume,
+        voiceVolume:
+          patch.voiceVolume !== undefined
+            ? Math.max(0, Math.min(100, patch.voiceVolume))
+            : state.voiceVolume,
+        voiceMuted: patch.voiceMuted ?? state.voiceMuted,
         jetpackAudio: patch.jetpackAudio ?? state.jetpackAudio,
         crtScanlines: patch.crtScanlines ?? state.crtScanlines,
         screenShake: patch.screenShake ?? state.screenShake,

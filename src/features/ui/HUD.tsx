@@ -14,6 +14,7 @@ import { networkManager } from '../network/peerRoom';
 import { formatMatchClock } from './hudUtils';
 import { ScoreboardOverlay } from './ScoreboardOverlay';
 import { InGameMenuModal } from './InGameMenuModal';
+import { HudCommsOverlay, VoiceMicButton } from '../comms/CommsPanel';
 import {
   AlertTriangle,
   Flag,
@@ -477,8 +478,10 @@ export function HUD({ onExitToWarRoom, onAbortRoom }: HUDProps) {
               </div>
             </div>
 
-            {/* Top-Right: Streamlined Ergonomic Actions (Scoreboard + Menu/Pause) */}
+            {/* Top-Right: Streamlined Ergonomic Actions (Voice + Scoreboard + Menu/Pause) */}
             <div className="flex items-center gap-1 sm:gap-1.5 pointer-events-auto shrink-0">
+              {Boolean(roomCode) && <VoiceMicButton compact showLabelOnDesktop={false} />}
+
               <button
                 type="button"
                 onClick={() => {
@@ -706,6 +709,9 @@ export function HUD({ onExitToWarRoom, onAbortRoom }: HUDProps) {
           </div>
         </div>
       )}
+
+      {/* SQUAD COMMS OVERLAY (Quick Emojis, Chat Drawer & Speaking Strip) */}
+      <HudCommsOverlay isTouchHUD={isTouchHUD} />
 
       {/* TAB TACTICAL SCOREBOARD OVERLAY */}
       <ScoreboardOverlay

@@ -16,6 +16,7 @@ import { useAvatarStore } from '../avatar/avatarStore';
 import { usePlayerStore } from '../player/playerStore';
 import { useMapStore } from '../map/mapStore';
 import { useCTFStore } from '../ctf/ctfStore';
+import { voiceManager } from '../comms/voiceManager';
 
 export interface PeerTransportSession {
   peer: Peer | null;
@@ -430,6 +431,7 @@ export function setupIncomingCadetConnection(
 
     if (session.isHostRole) {
       const updatedRoster = Object.values(useNetworkStore.getState().roster);
+      voiceManager.syncWithRoster(updatedRoster);
       callbacks.sendToNetwork({
         kind: 'room_auth',
         senderId: session.selfPeerId || 'host',

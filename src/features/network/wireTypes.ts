@@ -15,6 +15,7 @@ import type {
 } from './types';
 import type { MatchRulesConfig, Team } from '../ctf/types';
 import type { HostBatchSourceEntry, QuantizedPlayerState } from './fastProtocol';
+import type { ChatWirePayload, VoiceStatePayload } from '../comms/types';
 
 export const HOST_PEER_PREFIX = 'aerostrikeomegav2';
 
@@ -28,6 +29,9 @@ export const CADET_HOST_SILENCE_MS = 10000;
 export const DAMAGE_RATE_WINDOW_MS = 1000;
 export const MAX_DAMAGE_PACKETS_PER_SEC = 25;
 export const MAX_DAMAGE_PER_TARGET_PAIR_SEC = 220;
+
+export const CHAT_RATE_WINDOW_MS = 4000;
+export const MAX_CHAT_MESSAGES_PER_WINDOW = 6;
 
 export const FLAG_INTERACT_RADIUS_PX = 160;
 export const PICKUP_INTERACT_RADIUS_PX = 160;
@@ -107,7 +111,9 @@ export type WireMessage =
   | { kind: 'station_sync'; senderId: string; payload: StationSyncEvent }
   | { kind: 'peer_meta'; senderId: string; payload: Partial<PeerInfo> }
   | { kind: 'match_control'; senderId: string; payload: MatchControlPayload }
-  | { kind: 'room_auth'; senderId: string; payload: RoomAuthPayload };
+  | { kind: 'room_auth'; senderId: string; payload: RoomAuthPayload }
+  | { kind: 'chat'; senderId: string; payload: ChatWirePayload }
+  | { kind: 'voice_state'; senderId: string; payload: VoiceStatePayload };
 
 export interface HostSlotState extends HostBatchSourceEntry {
   playerId: string;

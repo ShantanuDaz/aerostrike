@@ -16,14 +16,20 @@ import {
   type WireMessage,
 } from './wireTypes';
 import {
+  ChatRateTracker,
   DamageRateTracker,
   isWithinInteractRadius,
   sanitizeIncomingPeerMeta,
   validateFlagEvent,
+  validateIncomingChat,
   validateIncomingDamage,
   validateIncomingKillFeed,
   validateIncomingShoot,
+  validateIncomingVoiceState,
 } from './hostSecurity';
+import { useChatStore } from '../comms/chatStore';
+import { useVoiceStore } from '../comms/voiceStore';
+import { voiceManager } from '../comms/voiceManager';
 import { FastSyncController, type FastSyncTransportCallbacks } from './fastSyncController';
 import { unpackQuantizedPlayerState, type WorldBatchEntry } from './fastProtocol';
 import { handleRoomAuthMessage, syncLocalCarrierFlagFromCTF } from './roomAuthHandlers';
@@ -51,6 +57,7 @@ export interface WireMessageContext {
   fastSync: FastSyncController;
   fastTransportCallbacks: FastSyncTransportCallbacks;
   damageRateTracker: DamageRateTracker;
+  chatRateTracker?: ChatRateTracker;
   findMemberByPeerId: (peerId: string) => RosterMember | undefined;
   findMemberByIdOrPeer: (id: string) => RosterMember | undefined;
   getClientConnections: () => IterableIterator<[string, DataConnection]>;
@@ -665,6 +672,37 @@ export function routeIncomingWireMessage(
         onStartMatch: ctx.onStartMatch,
         onRejoinMatch: ctx.onRejoinMatch,
       });
+      break;
+    }
+
+    case 'chat': {
+      const senderMember = senderPeerId ? ctx.findMemberByPeerId(senderPeerId) : undefined;
+      const validated = validateIncomingChat(
+        msg.payload,
+        senderPeerId,
+        senderMember,
+        ctx.isHostRole ? ctx.chatRateTracker : undefined,
+      );
+      if (!validated) break;
+      if (ctx.isHostRole) {
+        ctx.sendToNetwork({ kind: 'chat', senderId: msg.senderId, payload: validated }, senderPeerId);
+      }
+      useChatStore.getState().appendMessage(validated, true);
+      break;
+    }
+
+    case 'voice_state': {
+      const senderMember = senderPeerId ? ctx.findMemberByPeerId(senderPeerId) : undefined;
+      const validated = validateIncomingVoiceState(msg.payload, senderPeerId, senderMember);
+      if (!validated) break;
+      if (ctx.isHostRole) {
+        ctx.sendToNetwork(
+          { kind: 'voice_state', senderId: msg.senderId, payload: validated },
+          senderPeerId,
+        );
+      }
+      useVoiceStore.getState().setRemoteMicState(validated.playerId, validated.micEnabled);
+      voiceManager.reconcileOutgoingCalls();
       break;
     }
   }

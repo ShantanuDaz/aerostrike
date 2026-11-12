@@ -5,7 +5,7 @@ import {
   type MusicTrackId,
 } from "../../audio/musicEngine";
 import { useSettingsStore } from "../../settings/settingsStore";
-import { Music, Play, Square, Volume2, VolumeX } from "lucide-react";
+import { Mic, MicOff, Music, Play, Square, Volume2, VolumeX } from "lucide-react";
 
 interface AudioSettingsTabProps {
   previewingTrack: MusicTrackId | null;
@@ -274,6 +274,65 @@ export function AudioSettingsTab({
         >
           {settings.jetpackAudio ? "ON" : "OFF"}
         </button>
+      </div>
+
+      {/* Squad Voice Chat Audio */}
+      <div className="p-4 bg-slate-950/70 border border-emerald-500/25 clip-chamfer space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-white flex items-center gap-2">
+              {settings.voiceMuted ? (
+                <MicOff className="w-4 h-4 text-rose-400 shrink-0" />
+              ) : (
+                <Mic className="w-4 h-4 text-emerald-400 shrink-0" />
+              )}
+              Squad Voice Comms (Incoming)
+            </div>
+            <div className="text-xs text-slate-400 mt-0.5">
+              Adjust or mute incoming player voice volume independently of game SFX.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              sounds.playUiClick();
+              settings.updateSettings({ voiceMuted: !settings.voiceMuted });
+            }}
+            className={`shrink-0 px-3.5 sm:px-4 py-2 text-xs font-mono font-black uppercase tracking-wider clip-chamfer border transition cursor-pointer ${
+              !settings.voiceMuted
+                ? "bg-emerald-500/20 border-emerald-400 text-emerald-300"
+                : "bg-rose-500/20 border-rose-400 text-rose-300"
+            }`}
+          >
+            {settings.voiceMuted ? "MUTED" : "ENABLED"}
+          </button>
+        </div>
+
+        <div className="space-y-1.5 pt-2 border-t border-slate-800/80">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-mono uppercase tracking-wider text-slate-300">
+              Voice Volume
+            </span>
+            <span className="text-xs font-mono font-black text-emerald-300">
+              {settings.voiceMuted || settings.voiceVolume === 0
+                ? "Muted"
+                : `${settings.voiceVolume}%`}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={settings.voiceVolume}
+            onChange={(e) =>
+              settings.updateSettings({
+                voiceVolume: Number(e.target.value),
+                voiceMuted: Number(e.target.value) === 0,
+              })
+            }
+            className="w-full accent-emerald-400 cursor-pointer"
+          />
+        </div>
       </div>
 
       {/* Sound Test Pad */}

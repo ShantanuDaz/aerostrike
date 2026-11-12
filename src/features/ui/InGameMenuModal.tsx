@@ -19,6 +19,8 @@ import {
   Eye,
   LogOut,
   Maximize,
+  Mic,
+  MicOff,
   Minimize,
   Music,
   Pause,
@@ -54,6 +56,8 @@ export function InGameMenuModal({
   const masterVolume = useSettingsStore((s) => s.masterVolume);
   const sfxMuted = useSettingsStore((s) => s.sfxMuted);
   const musicEnabled = useSettingsStore((s) => s.musicEnabled);
+  const voiceVolume = useSettingsStore((s) => s.voiceVolume);
+  const voiceMuted = useSettingsStore((s) => s.voiceMuted);
   const cameraZoomMode = useSettingsStore((s) => s.cameraZoomMode);
   const cameraZoom = useSettingsStore((s) => s.cameraZoom);
   const hudScale = useSettingsStore((s) => s.hudScale);
@@ -214,6 +218,24 @@ export function InGameMenuModal({
                   <Music className="w-3 h-3" />
                   <span>Music</span>
                 </button>
+                {isMultiplayer && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sounds.playUiClick();
+                      updateSettings({ voiceMuted: !voiceMuted });
+                    }}
+                    className={`flex items-center gap-1 px-2.5 py-1 text-[10px] font-mono font-bold uppercase clip-chamfer border cursor-pointer transition ${
+                      !voiceMuted
+                        ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-200'
+                        : 'bg-rose-950/60 border-rose-500/50 text-rose-300'
+                    }`}
+                    title="Mute or unmute incoming squad voice"
+                  >
+                    {voiceMuted ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
+                    <span>Voice</span>
+                  </button>
+                )}
               </div>
             </div>
             <input
@@ -224,6 +246,26 @@ export function InGameMenuModal({
               onChange={(e) => updateSettings({ masterVolume: Number(e.target.value) })}
               className="w-full accent-cyan-400 cursor-pointer"
             />
+            {isMultiplayer && (
+              <div className="flex items-center gap-2 pt-1.5 border-t border-slate-800/70">
+                <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-emerald-300/90 shrink-0">
+                  Voice {voiceMuted ? 'Off' : `${voiceVolume}%`}
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={voiceVolume}
+                  onChange={(e) =>
+                    updateSettings({
+                      voiceVolume: Number(e.target.value),
+                      voiceMuted: Number(e.target.value) === 0,
+                    })
+                  }
+                  className="flex-1 accent-emerald-400 cursor-pointer"
+                />
+              </div>
+            )}
           </div>
 
           {/* HUD Scale & Accessibility */}

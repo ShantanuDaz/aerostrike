@@ -20,6 +20,8 @@ import { useAvatarStore } from '../avatar/avatarStore';
 import { useMapStore } from '../map/mapStore';
 import { clearOptimisticClaims } from '../combat/optimisticClaims';
 import { engineWorld } from '../game/engineWorld';
+import { voiceManager } from '../comms/voiceManager';
+import { useVoiceStore } from '../comms/voiceStore';
 
 export interface RoomAuthContext {
   isHostRole: boolean;
@@ -103,6 +105,18 @@ function handleJoinRequest(
       senderId: ctx.selfPeerId || 'host',
       payload: { type: 'roster_sync', roster: allMembers },
     });
+    voiceManager.syncWithRoster(allMembers);
+    if (conn && useVoiceStore.getState().micEnabled) {
+      ctx.safeSend(conn, {
+        kind: 'voice_state',
+        senderId: ctx.selfPeerId || 'host',
+        payload: {
+          playerId: useAvatarStore.getState().playerId,
+          peerId: ctx.selfPeerId || 'host',
+          micEnabled: true,
+        },
+      });
+    }
     return;
   }
 
@@ -149,6 +163,18 @@ function handleJoinRequest(
       if (ctx.verifiedPeerIds.has(peerId)) {
         ctx.safeSend(clientConn, rosterMsg);
       }
+    }
+    voiceManager.syncWithRoster(allMembers);
+    if (conn && useVoiceStore.getState().micEnabled) {
+      ctx.safeSend(conn, {
+        kind: 'voice_state',
+        senderId: ctx.selfPeerId || 'host',
+        payload: {
+          playerId: useAvatarStore.getState().playerId,
+          peerId: ctx.selfPeerId || 'host',
+          micEnabled: true,
+        },
+      });
     }
     return;
   }
@@ -215,6 +241,7 @@ function handleRejoinState(payload: AuthRejoinStateResponse, ctx: RoomAuthContex
   }
   if (payload.roster && payload.roster.length > 0) {
     useNetworkStore.getState().setRoster(payload.roster);
+    voiceManager.syncWithRoster(payload.roster);
     const stats = useMatchStatsStore.getState();
     for (const member of payload.roster) {
       stats.registerParticipant(member.playerId, member.callsign, member.team);
@@ -259,6 +286,18 @@ function handleJoinResponse(res: AuthJoinResponse, ctx: RoomAuthContext) {
   }
   if (res.roster && res.roster.length > 0) {
     useNetworkStore.getState().setRoster(res.roster);
+    voiceManager.syncWithRoster(res.roster);
+  }
+  if (useVoiceStore.getState().micEnabled) {
+    ctx.sendToNetwork({
+      kind: 'voice_state',
+      senderId: ctx.selfPeerId || useAvatarStore.getState().playerId,
+      payload: {
+        playerId: useAvatarStore.getState().playerId,
+        peerId: ctx.selfPeerId || useAvatarStore.getState().playerId,
+        micEnabled: true,
+      },
+    });
   }
   if (res.team) {
     usePlayerStore.getState().setTeam(res.team);
@@ -288,6 +327,7 @@ function handleJoinResponse(res: AuthJoinResponse, ctx: RoomAuthContext) {
 function handleRosterSync(roster: RosterMember[]) {
   if (!roster || roster.length === 0) return;
   useNetworkStore.getState().setRoster(roster);
+  voiceManager.syncWithRoster(roster);
   if (useNetworkStore.getState().gamePhase === 'in_game') {
     const stats = useMatchStatsStore.getState();
     for (const member of roster) {
