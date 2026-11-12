@@ -139,4 +139,61 @@ describe('Solo AI Squad formation, firing, and hazard/CTF reporting', () => {
     expect(redBot.player.isDead).toBe(false);
     expect(redBot.lastDamagedBy).toBeNull();
   });
+
+  it('spawns FFA hostile bot packs across presets and lets CTF bots capture when own flag is away', () => {
+    const map = createBotTestMap();
+
+    const ffa2 = createSoloBotSquad(map, 'blue', { squadSize: '1v1', mode: 'ffa' });
+    expect(ffa2).toHaveLength(1);
+
+    const ffa4 = createSoloBotSquad(map, 'blue', { squadSize: '2v2', mode: 'ffa' });
+    expect(ffa4).toHaveLength(3);
+
+    const ffa6 = createSoloBotSquad(map, 'blue', { squadSize: '3v3', mode: 'ffa' });
+    expect(ffa6).toHaveLength(5);
+
+    // CTF bot captures enemy flag at home base even when its own flag is stolen/away
+    const bots = createSoloBotSquad(map, 'blue', { squadSize: '1v1', mode: 'ctf' });
+    const redBot = bots[0];
+    redBot.player = {
+      ...redBot.player,
+      x: map.baseRed.x + map.baseRed.width / 2,
+      y: map.baseRed.y + map.baseRed.height / 2,
+      carryingFlag: true,
+      isDead: false,
+    };
+    const localPlayer: Player = {
+      ...redBot.player,
+      id: 'local_1',
+      team: 'blue',
+      x: 200,
+      y: 830,
+    };
+    const flags = createFlags(map);
+    flags.blue.status = 'carried';
+    flags.blue.carrierId = redBot.id;
+    flags.red.status = 'carried'; // Red's own flag is away!
+    flags.red.carrierId = 'local_1';
+
+    const step = stepSoloBots({
+      bots,
+      localPlayer,
+      map,
+      flags,
+      matchStatus: 'playing',
+      pickups: [],
+      respawnDelaySec: 3,
+      nowMs: 1000,
+      dt: 1 / 60,
+      mode: 'ctf',
+    });
+
+    expect(step.flagEvents).toContainEqual(
+      expect.objectContaining({
+        action: 'capture',
+        team: 'red',
+        carrierId: redBot.id,
+      }),
+    );
+  });
 });

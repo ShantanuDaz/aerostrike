@@ -1,6 +1,6 @@
 import type { AvatarConfig, HeadgearType, JetpackStyle, VisorStyle } from '../avatar/types';
 import { WEAPONS } from '../combat/weaponsConfig';
-import type { Flag, MatchStatus, Team } from '../ctf/types';
+import type { Flag, GameMode, MatchStatus, Team } from '../ctf/types';
 import type {
   DamageEvent,
   FlagSyncEvent,
@@ -88,6 +88,7 @@ export interface DamageValidationContext {
   remoteTarget?: { isDead: boolean; isInvulnerable: boolean };
   isInActiveBattle: boolean;
   gamePhase: 'staging' | 'in_game';
+  mode?: GameMode;
   rateTracker: DamageRateTracker;
   nowMs?: number;
 }
@@ -104,6 +105,7 @@ export function validateIncomingDamage(ctx: DamageValidationContext): boolean {
     remoteTarget,
     isInActiveBattle,
     gamePhase,
+    mode = 'ctf',
     rateTracker,
     nowMs = performance.now(),
   } = ctx;
@@ -166,6 +168,7 @@ export function validateIncomingDamage(ctx: DamageValidationContext): boolean {
 
   const canonicalTargetId = targetMember?.playerId || evt.targetId;
   if (
+    mode !== 'ffa' &&
     senderMember &&
     targetMember &&
     canonicalDealerId !== canonicalTargetId &&
@@ -252,6 +255,7 @@ export function validateIncomingKillFeed(
   senderMember: RosterMember | undefined,
   isInActiveBattle: boolean,
   gamePhase: 'staging' | 'in_game',
+  mode: GameMode = 'ctf',
 ): KillFeedEvent | null {
   if (!isInActiveBattle || gamePhase !== 'in_game') return null;
   if (!payload || typeof payload !== 'object') return null;
@@ -275,6 +279,17 @@ export function validateIncomingKillFeed(
   const validWeapon =
     evt.weaponType === 'hazard' || evt.weaponType === 'self' || Boolean(WEAPONS[evt.weaponType]);
   if (!validWeapon) return null;
+
+  if (
+    mode !== 'ffa' &&
+    evt.killerId !== evt.victimId &&
+    evt.weaponType !== 'hazard' &&
+    evt.weaponType !== 'self' &&
+    evt.killerTeam === evt.victimTeam
+  ) {
+    console.warn(`[Host Security] Dropped same-team kill_feed claim in mode="${mode}"`);
+    return null;
+  }
 
   if (senderMember) {
     const senderMatchesVictim =
@@ -404,7 +419,9 @@ export function validateFlagEvent(
   flags: Record<Team, Flag>,
   isInActiveBattle: boolean,
   matchStatus: MatchStatus,
+  mode: GameMode = 'ctf',
 ): ValidatedFlagCommand | null {
+  if (mode !== 'ctf') return null;
   if (!isInActiveBattle || matchStatus !== 'playing') return null;
   if (!actorMember) return null;
   if (!flagEvt || typeof flagEvt !== 'object') return null;
@@ -469,8 +486,8 @@ export function validateFlagEvent(
       if (evt.team !== actorTeam) return null;
       const ownFlag = flags[actorTeam];
       const targetFlag = flags[enemyTeam];
+      // Allow capture at home base regardless of own flag status (at_base / carried / dropped)
       if (
-        ownFlag.status !== 'at_base' ||
         targetFlag.status !== 'carried' ||
         targetFlag.carrierId !== actorId
       ) {

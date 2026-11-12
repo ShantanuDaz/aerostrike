@@ -38,11 +38,13 @@ export interface RoomAuthContext {
 }
 
 export function syncLocalCarrierFlagFromCTF(payload: MatchSyncStatePayload) {
+  const mode = payload.matchRules?.mode ?? useCTFStore.getState().matchRules.mode;
   const myPlayerId = useAvatarStore.getState().playerId;
   const localPlayer = engineWorld.localPlayer ?? usePlayerStore.getState().player;
   const enemyTeam: Team = localPlayer.team === 'blue' ? 'red' : 'blue';
   const enemyFlag = payload.flags[enemyTeam];
   const shouldCarry =
+    mode === 'ctf' &&
     enemyFlag.status === 'carried' &&
     (enemyFlag.carrierId === myPlayerId || enemyFlag.carrierId === localPlayer.id);
 

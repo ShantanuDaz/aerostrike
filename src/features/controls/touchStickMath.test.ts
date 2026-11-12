@@ -121,6 +121,36 @@ describe('touchStickMath', () => {
       expect(moveRes.offsetY).toBeCloseTo(-compact.moveMaxDist, 5);
     });
 
+    it('aligns aimFirePerimeterDist with AIM_MAX_DIST - 2 so moving inside aims and perimeter shoots', () => {
+      expect(AIM_FIRE_PERIMETER_DIST).toBe(AIM_MAX_DIST - 2);
+      const metrics = getScaledStickMetrics(1, 5);
+      expect(metrics.aimFirePerimeterDist).toBe(metrics.aimMaxDist - 2);
+      expect(metrics.aimPerimeterRingSize).toBeCloseTo(
+        metrics.aimFirePerimeterDist * 2 + metrics.aimKnobSize,
+        4,
+      );
+
+      // Inside ring -> aims only
+      const inside = evaluateAimStick(metrics.aimFirePerimeterDist - 2, 0, {
+        maxDist: metrics.aimMaxDist,
+        deadzoneDist: metrics.aimDeadzoneDist,
+        firePerimeterDist: metrics.aimFirePerimeterDist,
+        aimMode: 'precision',
+      });
+      expect(inside.hasAim).toBe(true);
+      expect(inside.isFiring).toBe(false);
+
+      // Touching perimeter ring -> fires!
+      const perimeter = evaluateAimStick(metrics.aimFirePerimeterDist, 0, {
+        maxDist: metrics.aimMaxDist,
+        deadzoneDist: metrics.aimDeadzoneDist,
+        firePerimeterDist: metrics.aimFirePerimeterDist,
+        aimMode: 'precision',
+      });
+      expect(perimeter.hasAim).toBe(true);
+      expect(perimeter.isFiring).toBe(true);
+    });
+
     it('fires immediately past deadzone in instant aim mode', () => {
       const metrics = getScaledStickMetrics(0.85, 6);
       const insideDeadzone = evaluateAimStick(4, 0, {

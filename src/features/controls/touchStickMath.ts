@@ -8,7 +8,7 @@ export const AIM_PAD_SIZE = 124;
 export const AIM_KNOB_SIZE = 36;
 export const AIM_MAX_DIST = (AIM_PAD_SIZE - AIM_KNOB_SIZE) / 2; // 44px
 export const AIM_DEADZONE_DIST = 6;
-export const AIM_FIRE_PERIMETER_DIST = AIM_MAX_DIST - 4; // 40px: knob edge touches perimeter ring
+export const AIM_FIRE_PERIMETER_DIST = AIM_MAX_DIST - 2; // 42px: knob edge reaches outer perimeter ring
 
 export const STICK_HIT_RADIUS = 104;
 
@@ -42,9 +42,9 @@ export function getScaledStickMetrics(
     2,
     Math.min(aimMaxDist - 6, Number.isFinite(rawDeadzone) ? rawDeadzone : AIM_DEADZONE_DIST),
   );
-  const perimeterInset = Math.max(3, Math.round(4 * scale));
+  const perimeterInset = Math.max(1.5, Math.round(2 * scale * 2) / 2);
   const aimFirePerimeterDist = Math.max(aimDeadzoneDist + 4, aimMaxDist - perimeterInset);
-  const aimPerimeterRingSize = Math.round(106 * scale);
+  const aimPerimeterRingSize = Math.round(aimFirePerimeterDist * 2 + aimKnobSize);
   const stickHitRadius = Math.round(STICK_HIT_RADIUS * scale);
 
   return {

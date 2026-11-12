@@ -3,9 +3,9 @@ import type { ActiveWeaponPickup, Bullet, WeaponType } from '../combat/types';
 import { WEAPONS } from '../combat/weaponsConfig';
 import { getSafeMuzzlePoint } from '../combat/updateBullets';
 import { hasSolidLineOfSight, isPointInSolidTerrain } from '../map/terrainGeometry';
-import type { Team, Flag, MatchStatus } from '../ctf/types';
+import type { GameMode, Team, Flag, MatchStatus } from '../ctf/types';
 import type { ActiveRefillStation, GameMap } from '../map/types';
-import { pickTeamSpawn } from '../player/playerStore';
+import { pickSpawnForMode } from '../player/playerStore';
 import { updatePlayer } from '../player/updatePlayer';
 import type { InputState, Player } from '../player/types';
 import { sounds } from '../audio/soundEngine';
@@ -160,8 +160,9 @@ function createBotEntity(
   map: GameMap,
   idx: number,
   difficulty: BotDifficulty = 'veteran',
+  mode: GameMode = 'ctf',
 ): SoloBot {
-  const spawn = pickTeamSpawn(map, team, preset.id);
+  const spawn = pickSpawnForMode(map, team, mode, preset.id);
   const player: Player = {
     id: preset.id,
     team,
@@ -219,6 +220,7 @@ function createBotEntity(
 export interface CreateSoloBotSquadOptions {
   squadSize?: SoloSquadSize;
   difficulty?: BotDifficulty;
+  mode?: GameMode;
 }
 
 /**
@@ -231,7 +233,27 @@ export function createSoloBotSquad(
 ): SoloBot[] {
   const squadSize = options?.squadSize ?? '2v2';
   const difficulty = options?.difficulty ?? 'veteran';
+  const mode = options?.mode ?? 'ctf';
   const bots: SoloBot[] = [];
+
+  if (mode === 'ffa') {
+    const ffaCount = squadSize === '1v1' ? 1 : squadSize === '3v3' ? 5 : 3;
+    const pool = [
+      { preset: BOT_RED_PRESETS[0], team: 'red' as Team },
+      { preset: BOT_BLUE_PRESETS[0], team: 'blue' as Team },
+      { preset: BOT_RED_PRESETS[1], team: 'red' as Team },
+      { preset: BOT_BLUE_PRESETS[1], team: 'blue' as Team },
+      { preset: BOT_RED_PRESETS[2], team: 'red' as Team },
+      { preset: BOT_BLUE_PRESETS[2], team: 'blue' as Team },
+    ];
+    for (let i = 0; i < ffaCount && i < pool.length; i++) {
+      bots.push(
+        createBotEntity(pool[i].preset, pool[i].team, map, i, difficulty, 'ffa'),
+      );
+    }
+    return bots;
+  }
+
   const enemyTeam: Team = localTeam === 'blue' ? 'red' : 'blue';
 
   const allyPresets = localTeam === 'blue' ? BOT_BLUE_PRESETS : BOT_RED_PRESETS;
@@ -242,10 +264,10 @@ export function createSoloBotSquad(
 
   let slotIdx = 0;
   for (let i = 0; i < allyCount && i < allyPresets.length; i++) {
-    bots.push(createBotEntity(allyPresets[i], localTeam, map, slotIdx++, difficulty));
+    bots.push(createBotEntity(allyPresets[i], localTeam, map, slotIdx++, difficulty, mode));
   }
   for (let i = 0; i < enemyCount && i < enemyPresets.length; i++) {
-    bots.push(createBotEntity(enemyPresets[i], enemyTeam, map, slotIdx++, difficulty));
+    bots.push(createBotEntity(enemyPresets[i], enemyTeam, map, slotIdx++, difficulty, mode));
   }
 
   return bots;
@@ -321,6 +343,7 @@ export function stepSoloBots(params: {
   pickups: ActiveWeaponPickup[];
   stations?: ActiveRefillStation[];
   respawnDelaySec?: number;
+  mode?: GameMode;
   nowMs: number;
   dt: number;
 }): StepSoloBotsResult {
@@ -333,9 +356,12 @@ export function stepSoloBots(params: {
     pickups,
     stations = [],
     respawnDelaySec = 4.5,
+    mode = 'ctf',
     nowMs,
     dt,
   } = params;
+  const isCTF = mode === 'ctf';
+  const isFFA = mode === 'ffa';
   const spawnedBullets: Bullet[] = [];
   const newlyDeadBots: StepSoloBotsResult['newlyDeadBots'] = [];
   const flagEvents: StepSoloBotsResult['flagEvents'] = [];
@@ -355,7 +381,7 @@ export function stepSoloBots(params: {
       bot.input.dash = false;
       bot.isBoostingNow = false;
 
-      const updated = updatePlayer(p, bot.input, map, dt, false, respawnDelaySec);
+      const updated = updatePlayer(p, bot.input, map, dt, false, respawnDelaySec, mode);
       bot.player = updated;
       if (wasDead && !updated.isDead) {
         bot.weaponType = 'rifle';
@@ -384,10 +410,10 @@ export function stepSoloBots(params: {
     };
 
     const considerCandidate = (cand: TargetCandidate) => {
-      if (cand.isDead || cand.team === bot.team) return;
+      if (cand.isDead || (!isFFA && cand.team === bot.team)) return;
       const dist = Math.hypot(cand.x - p.x, cand.y - p.y);
       const los = dist < 660 && hasLineOfSight(map, p.x, p.y - 5, cand.x, cand.y - 5);
-      const effectiveScore = dist - (los ? 280 : 0) - (cand.carryingFlag ? 220 : 0);
+      const effectiveScore = dist - (los ? 280 : 0) - (isCTF && cand.carryingFlag ? 220 : 0);
       if (!targetAcc.target || effectiveScore < targetAcc.score) {
         targetAcc.target = cand;
         targetAcc.dist = dist;
@@ -432,7 +458,26 @@ export function stepSoloBots(params: {
     let objX: number;
     let objY: number;
 
-    if (p.carryingFlag) {
+    if (!isCTF) {
+      if (activeTarget) {
+        objX = activeTarget.x;
+        objY = activeTarget.y;
+      } else {
+        objX = map.width * 0.5;
+        objY = map.height * 0.52;
+      }
+
+      if (bot.weaponType === 'pistol' || (bot.weaponType === 'rifle' && bot.ammo <= 10)) {
+        for (let k = 0; k < pickups.length; k++) {
+          const pk = pickups[k];
+          if (pk.respawnTimer <= 0 && Math.hypot(pk.x - p.x, pk.y - p.y) < 280) {
+            objX = pk.x;
+            objY = pk.y;
+            break;
+          }
+        }
+      }
+    } else if (p.carryingFlag) {
       objX = friendlyFlag.baseX;
       objY = friendlyFlag.baseY;
     } else if (
@@ -599,7 +644,7 @@ export function stepSoloBots(params: {
     bot.input.shooting = shouldShoot;
     bot.input.dash = wantsDash;
 
-    const nextPlayer = updatePlayer(p, bot.input, map, dt, false, respawnDelaySec);
+    const nextPlayer = updatePlayer(p, bot.input, map, dt, false, respawnDelaySec, mode);
     bot.player = nextPlayer;
     bot.isBoostingNow =
       boosting && !nextPlayer.fuelOverheated && nextPlayer.boostFuel > 0 && !nextPlayer.isDead;
@@ -607,7 +652,7 @@ export function stepSoloBots(params: {
     if (!wasDead && nextPlayer.isDead) {
       newlyDeadBots.push({
         bot,
-        droppedFlagTeam: prevCarryingFlag ? enemyTeam : null,
+        droppedFlagTeam: isCTF && prevCarryingFlag ? enemyTeam : null,
       });
       continue;
     }
@@ -724,7 +769,7 @@ export function stepSoloBots(params: {
     }
 
     // CTF Objective Checks
-    if (!nextPlayer.isDead && matchStatus === 'playing') {
+    if (isCTF && !nextPlayer.isDead && matchStatus === 'playing') {
       if (enemyFlag.status !== 'carried') {
         const dEnemy = Math.hypot(nextPlayer.x - enemyFlag.x, nextPlayer.y - enemyFlag.y);
         if (dEnemy < nextPlayer.radius + 24) {
@@ -749,7 +794,7 @@ export function stepSoloBots(params: {
         }
       }
 
-      if (nextPlayer.carryingFlag && friendlyFlag.status === 'at_base') {
+      if (nextPlayer.carryingFlag) {
         const dBase = Math.hypot(
           nextPlayer.x - friendlyFlag.baseX,
           nextPlayer.y - friendlyFlag.baseY,

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { InputState, Player } from './types';
 import type { GameMap } from '../map/types';
 import { getOrCreatePlayerId, loadStoredAvatar } from '../avatar/avatarConfig';
-import type { Team } from '../ctf/types';
+import type { GameMode, Team } from '../ctf/types';
 import { useCTFStore } from '../ctf/ctfStore';
 import { engineWorld } from '../game/engineWorld';
 
@@ -23,6 +23,29 @@ export function pickTeamSpawn(
     return spawns[hash % spawns.length];
   }
   return spawns[Math.floor(Math.random() * spawns.length)];
+}
+
+export function pickSpawnForMode(
+  map: GameMap,
+  team: Team,
+  mode: GameMode = 'ctf',
+  seedId?: string,
+): { x: number; y: number } {
+  if (mode !== 'ffa') {
+    return pickTeamSpawn(map, team, seedId);
+  }
+  const combined = [...(map.spawnPointsBlue || []), ...(map.spawnPointsRed || [])];
+  if (combined.length === 0) {
+    return pickTeamSpawn(map, team, seedId);
+  }
+  if (seedId && combined.length > 1) {
+    let hash = 0;
+    for (let i = 0; i < seedId.length; i++) {
+      hash = (hash * 31 + seedId.charCodeAt(i)) >>> 0;
+    }
+    return combined[hash % combined.length];
+  }
+  return combined[Math.floor(Math.random() * combined.length)];
 }
 
 const INITIAL_PLAYER: Player = {
@@ -71,7 +94,7 @@ interface PlayerState {
   setTeam: (team: Team) => void;
   applyDamage: (damage: number, knockbackX?: number, knockbackY?: number) => boolean; // returns true if killed
   respawn: (spawnX: number, spawnY: number) => void;
-  spawnAtTeamBase: (map: GameMap, seedId?: string) => void;
+  spawnAtTeamBase: (map: GameMap, seedId?: string, modeOverride?: GameMode) => void;
   resetPlayer: () => void;
 }
 
@@ -154,9 +177,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     engineWorld.notifyUrgentLocalStateChange();
   },
 
-  spawnAtTeamBase: (map, seedId) => {
+  spawnAtTeamBase: (map, seedId, modeOverride) => {
     const player = engineWorld.localPlayer ?? get().player;
-    const spawn = pickTeamSpawn(map, player.team, seedId);
+    const activeMode = modeOverride ?? useCTFStore.getState().matchRules.mode;
+    const spawn = pickSpawnForMode(map, player.team, activeMode, seedId);
     const nextPlayer: Player = {
       ...player,
       id: seedId || player.id,

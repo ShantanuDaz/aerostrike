@@ -1,6 +1,7 @@
 import type { AvatarConfig } from '../avatar/types';
 import type { Team, MatchStatus, Flag, MatchRulesConfig } from '../ctf/types';
 import type { WeaponType } from '../combat/types';
+import type { PlayerMatchStats } from '../combat/statsStore';
 import type { RefillStationType } from '../map/types';
 
 export interface PlayerSnapshot {
@@ -71,6 +72,9 @@ export interface MatchSyncStatePayload {
   isOvertime?: boolean;
   matchStatus: MatchStatus;
   winner: Team | null;
+  winnerId?: string | null;
+  winnerCallsign?: string | null;
+  playerStats?: PlayerMatchStats[];
   bannerMessage: string | null;
   flags: Record<Team, Flag>;
   lastScorer?: {

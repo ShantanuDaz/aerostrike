@@ -36,12 +36,26 @@ describe('useCTFStore rules, flag lifecycle, clock, and sudden-death overtime', 
 
   it('sanitizes valid presets and rejects invalid rule mutations', () => {
     expect(sanitizeMatchRules({ targetCaptures: 5, timeLimitSec: 480, respawnDelaySec: 2.5 })).toEqual({
+      mode: 'ctf',
       targetCaptures: 5,
       timeLimitSec: 480,
       respawnDelaySec: 2.5,
     });
 
+    // Timed modes coerce untimed (0) back to 300s default
+    expect(sanitizeMatchRules({ mode: 'tdm', timeLimitSec: 0 })).toEqual({
+      ...DEFAULT_MATCH_RULES,
+      mode: 'tdm',
+      timeLimitSec: 300,
+    });
+    expect(sanitizeMatchRules({ mode: 'ffa', timeLimitSec: 0 })).toEqual({
+      ...DEFAULT_MATCH_RULES,
+      mode: 'ffa',
+      timeLimitSec: 300,
+    });
+
     const sanitized = sanitizeMatchRules({
+      mode: 'invalid' as never,
       targetCaptures: 99 as never,
       timeLimitSec: -50 as never,
       respawnDelaySec: 0.1 as never,
@@ -182,5 +196,136 @@ describe('useCTFStore rules, flag lifecycle, clock, and sudden-death overtime', 
       score: { blue: 0, red: 99 },
     });
     expect(useCTFStore.getState().score).toEqual({ blue: 1, red: 0 });
+  });
+
+  it('tracks TDM team kill tallies, timed victory, and Sudden-Death Overtime under Host authority', () => {
+    useCTFStore.getState().initMatch(TEST_MAP, { mode: 'tdm', timeLimitSec: 180 });
+    expect(useCTFStore.getState().matchRules.mode).toBe('tdm');
+
+    // Flags cannot be picked up in TDM
+    expect(useCTFStore.getState().pickupFlag('red', 'p1')).toBe(false);
+
+    // Record kills -> increments team kill score and authoritative player stats
+    useCTFStore.getState().recordAuthoritativeKill({
+      id: 'tdm_k1',
+      killerId: 'p_blue',
+      killerCallsign: 'Ace',
+      killerTeam: 'blue',
+      victimId: 'p_red',
+      victimCallsign: 'Spectre',
+      victimTeam: 'red',
+      weaponType: 'rifle',
+    });
+    expect(useCTFStore.getState().score).toEqual({ blue: 1, red: 0 });
+
+    // Non-host kill feed helper updates feed ONLY, preserving Host stats authority
+    useMatchStatsStore.getState().recordKillFeedOnly({
+      id: 'tdm_client_feed_only',
+      killerId: 'p_red',
+      killerCallsign: 'Spectre',
+      killerTeam: 'red',
+      victimId: 'p_blue',
+      victimCallsign: 'Ace',
+      victimTeam: 'blue',
+      weaponType: 'pistol',
+    });
+    expect(useMatchStatsStore.getState().statsByPlayerId.p_red?.kills ?? 0).toBe(0);
+    expect(useMatchStatsStore.getState().killFeed.some((k) => k.id === 'tdm_client_feed_only')).toBe(true);
+
+    // Tie it 1-1 via authoritative kill, then expire clock -> enters Overtime
+    useCTFStore.getState().recordAuthoritativeKill({
+      id: 'tdm_k2',
+      killerId: 'p_red',
+      killerCallsign: 'Spectre',
+      killerTeam: 'red',
+      victimId: 'p_blue',
+      victimCallsign: 'Ace',
+      victimTeam: 'blue',
+      weaponType: 'sniper',
+    });
+    expect(useCTFStore.getState().score).toEqual({ blue: 1, red: 1 });
+
+    useCTFStore.getState().tickTimers(180, true, true);
+    expect(useCTFStore.getState().isOvertime).toBe(true);
+    expect(useCTFStore.getState().matchStatus).toBe('playing');
+
+    // Next kill in Overtime wins immediately
+    useCTFStore.getState().recordAuthoritativeKill({
+      id: 'tdm_k3',
+      killerId: 'p_blue',
+      killerCallsign: 'Ace',
+      killerTeam: 'blue',
+      victimId: 'p_red',
+      victimCallsign: 'Spectre',
+      victimTeam: 'red',
+      weaponType: 'shotgun',
+    });
+    const finalState = useCTFStore.getState();
+    expect(finalState.matchStatus).toBe('game_over');
+    expect(finalState.winner).toBe('blue');
+    expect(finalState.score).toEqual({ blue: 2, red: 1 });
+  });
+
+  it('decides FFA 1st/2nd/3rd place by kills when timed clock expires and syncs winnerId & playerStats', () => {
+    useCTFStore.getState().initMatch(TEST_MAP, { mode: 'ffa', timeLimitSec: 180 });
+    useMatchStatsStore.getState().registerParticipant('p1', 'Alpha', 'blue');
+    useMatchStatsStore.getState().registerParticipant('p2', 'Bravo', 'red');
+    useMatchStatsStore.getState().registerParticipant('p3', 'Charlie', 'blue');
+
+    // Alpha: 3 kills, Bravo: 2 kills, Charlie: 1 kill
+    for (let i = 0; i < 3; i++) {
+      useCTFStore.getState().recordAuthoritativeKill({
+        id: `ffa_a_${i}`,
+        killerId: 'p1',
+        killerCallsign: 'Alpha',
+        killerTeam: 'blue',
+        victimId: 'p3',
+        victimCallsign: 'Charlie',
+        victimTeam: 'blue',
+        weaponType: 'rifle',
+      });
+    }
+    for (let i = 0; i < 2; i++) {
+      useCTFStore.getState().recordAuthoritativeKill({
+        id: `ffa_b_${i}`,
+        killerId: 'p2',
+        killerCallsign: 'Bravo',
+        killerTeam: 'red',
+        victimId: 'p3',
+        victimCallsign: 'Charlie',
+        victimTeam: 'blue',
+        weaponType: 'shotgun',
+      });
+    }
+    useCTFStore.getState().recordAuthoritativeKill({
+      id: 'ffa_c_0',
+      killerId: 'p3',
+      killerCallsign: 'Charlie',
+      killerTeam: 'blue',
+      victimId: 'p2',
+      victimCallsign: 'Bravo',
+      victimTeam: 'red',
+      weaponType: 'pistol',
+    });
+
+    useCTFStore.getState().tickTimers(180, true, true);
+    const ended = useCTFStore.getState();
+    expect(ended.matchStatus).toBe('game_over');
+    expect(ended.winnerId).toBe('p1');
+    expect(ended.winnerCallsign).toBe('Alpha');
+
+    // Snapshot carries authoritative playerStats & winnerId to clients
+    const snapshot = ended.exportMatchState();
+    expect(snapshot.winnerId).toBe('p1');
+    expect(snapshot.playerStats?.find((s) => s.playerId === 'p1')?.kills).toBe(3);
+
+    useCTFStore.getState().prepareClientArena(TEST_MAP, { mode: 'ffa', timeLimitSec: 180 });
+    useMatchStatsStore.getState().resetStats();
+    useCTFStore.getState().applyAuthoritativeState(snapshot, true);
+
+    expect(useCTFStore.getState().winnerId).toBe('p1');
+    expect(useMatchStatsStore.getState().statsByPlayerId.p1?.kills).toBe(3);
+    expect(useMatchStatsStore.getState().statsByPlayerId.p2?.kills).toBe(2);
+    expect(useMatchStatsStore.getState().statsByPlayerId.p3?.kills).toBe(1);
   });
 });

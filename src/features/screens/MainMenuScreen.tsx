@@ -15,10 +15,13 @@ import { useAvatarStore } from '../avatar/avatarStore';
 import { useSettingsStore, type SettingsTab } from '../settings/settingsStore';
 import { WEAPONS } from '../combat/weaponsConfig';
 import { networkManager } from '../network/peerRoom';
+import { useMapStore } from '../map/mapStore';
+import { useCTFStore } from '../ctf/ctfStore';
 import { sounds } from '../audio/soundEngine';
 import { PwaInstallButton, PwaOfflinePill, usePwaStore } from '../pwa';
 import { OrbitalHangarCanvas } from './mainMenu/OrbitalHangarCanvas';
 import { JoinSquadModal } from './mainMenu/JoinSquadModal';
+import { HostMatchModal, type HostLaunchConfig } from './mainMenu/HostMatchModal';
 import {
   SoloSkirmishModal,
   type SoloLaunchConfig,
@@ -55,6 +58,7 @@ export function MainMenuScreen({
 
   const isOnline = usePwaStore((s) => s.isOnline);
   const [showJoinModal, setShowJoinModal] = useState(false);
+  const [showHostModal, setShowHostModal] = useState(false);
   const [showSoloModal, setShowSoloModal] = useState(() => Boolean(initialOpenSolo));
   const [offlineWarning, setOfflineWarning] = useState<string | null>(null);
 
@@ -90,9 +94,18 @@ export function MainMenuScreen({
     }
     setOfflineWarning(null);
     ensureEnlistedWithCallsign();
+    setShowHostModal(true);
+  };
+
+  const handleConfirmHostRoom = (config: HostLaunchConfig) => {
+    ensureEnlistedWithCallsign();
     const newCode = 'ROOM-' + Math.random().toString(36).substring(2, 7).toUpperCase();
     networkManager.connect(newCode, true);
+    // Must apply map & rules AFTER connect(), since connect() clears stale room state & resets rules
+    useMapStore.getState().selectMap(config.mapId);
+    useCTFStore.getState().setMatchRules(config.matchRules);
     updateRoomUrl(newCode);
+    setShowHostModal(false);
     onEnterWarRoom(newCode, true);
   };
 
@@ -309,6 +322,15 @@ export function MainMenuScreen({
         onClose={() => setShowJoinModal(false)}
         onJoinRoomCode={handleJoinRoomCode}
       />
+
+      {/* HOST MATCH CONFIG MODAL */}
+      {showHostModal && (
+        <HostMatchModal
+          isOpen
+          onClose={() => setShowHostModal(false)}
+          onConfirmHost={handleConfirmHostRoom}
+        />
+      )}
 
       {/* SOLO SKIRMISH CONFIG MODAL */}
       {showSoloModal && (

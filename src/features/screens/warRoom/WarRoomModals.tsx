@@ -1,9 +1,12 @@
-import type {
-  MatchRulesConfig,
-  MatchTimeLimitPreset,
-  RespawnDelayPreset,
-  TargetCapturesPreset,
-  Team,
+import {
+  GAME_MODES,
+  GAME_MODE_META,
+  type GameMode,
+  type MatchRulesConfig,
+  type MatchTimeLimitPreset,
+  type RespawnDelayPreset,
+  type TargetCapturesPreset,
+  type Team,
 } from '../../ctf/types';
 import type { GameMap } from '../../map/types';
 import type { RosterMember } from '../../network/types';
@@ -13,12 +16,15 @@ import { formatClockPreset, getCleanMapTitle, getMapModeTag } from './warRoomUti
 import {
   Check,
   Clock,
+  Crosshair,
   Flag,
   Lock,
   Map as MapIcon,
   ShieldAlert,
+  Skull,
   SlidersHorizontal,
   Sparkles,
+  Swords,
   TimerReset,
   Trophy,
   Users,
@@ -133,6 +139,7 @@ export function TheaterSelectModal({
 
 interface SquadRosterModalProps {
   isOpen: boolean;
+  mode: GameMode;
   totalPlayers: number;
   readyCount: number;
   blueMembers: RosterMember[];
@@ -147,6 +154,7 @@ interface SquadRosterModalProps {
 
 export function SquadRosterModal({
   isOpen,
+  mode,
   totalPlayers,
   readyCount,
   blueMembers,
@@ -159,6 +167,9 @@ export function SquadRosterModal({
   onClose,
 }: SquadRosterModalProps) {
   if (!isOpen) return null;
+
+  const isFFA = mode === 'ffa';
+  const allFFAMembers = [...blueMembers, ...redMembers];
 
   const renderRosterRow = (m: RosterMember, faction: Team) => {
     const isLocal = m.playerId === localPlayerId;
@@ -268,73 +279,90 @@ export function SquadRosterModal({
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto cyber-scroll p-3.5 sm:tall:p-5 short:p-3 bg-slate-950/60">
-          <div className="grid grid-cols-1 short-wide:grid-cols-2 sm:grid-cols-2 gap-3">
-            {/* Blue Squad Column */}
-            <div className="bg-slate-950/75 border border-cyan-500/35 p-3 clip-chamfer flex flex-col gap-2">
-              <div className="flex items-center justify-between border-b border-cyan-500/20 pb-2">
-                <span className="text-xs font-black text-cyan-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <Flag className="w-3.5 h-3.5 text-cyan-400" />
-                  Blue Squad
+          {isFFA ? (
+            <div className="bg-slate-950/75 border border-amber-500/35 p-3 clip-chamfer flex flex-col gap-2">
+              <div className="flex items-center justify-between border-b border-amber-500/20 pb-2">
+                <span className="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <Swords className="w-3.5 h-3.5 text-amber-400" />
+                  Free For All Combatants ({allFFAMembers.length})
                 </span>
-                <span className="text-[10px] font-mono text-cyan-300 font-bold">
-                  {blueMembers.length}
+                <span className="text-[10px] font-mono text-slate-400">
+                  Everyone Solo • Top 3 Kills Win
                 </span>
               </div>
               <div className="flex flex-col gap-1.5">
-                {blueMembers.map((m) => renderRosterRow(m, 'blue'))}
-                {blueMembers.length === 0 && (
-                  <div className="text-[10px] font-mono text-slate-500 text-center py-4">
-                    [ NO BLUE PILOTS ]
-                  </div>
-                )}
+                {allFFAMembers.map((m) => renderRosterRow(m, m.team))}
               </div>
-              <button
-                type="button"
-                onClick={() => onSelectTeam('blue')}
-                disabled={localTeam === 'blue'}
-                className={`mt-auto w-full py-2 text-[10px] font-black uppercase tracking-widest clip-chamfer transition ${
-                  localTeam === 'blue'
-                    ? 'bg-cyan-500/15 border border-cyan-400/50 text-cyan-300 cursor-default'
-                    : 'bg-blue-600 hover:bg-blue-500 text-white cursor-pointer'
-                }`}
-              >
-                {localTeam === 'blue' ? 'Your Active Squad' : 'Switch to Blue'}
-              </button>
             </div>
+          ) : (
+            <div className="grid grid-cols-1 short-wide:grid-cols-2 sm:grid-cols-2 gap-3">
+              {/* Blue Squad Column */}
+              <div className="bg-slate-950/75 border border-cyan-500/35 p-3 clip-chamfer flex flex-col gap-2">
+                <div className="flex items-center justify-between border-b border-cyan-500/20 pb-2">
+                  <span className="text-xs font-black text-cyan-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Flag className="w-3.5 h-3.5 text-cyan-400" />
+                    Blue Squad
+                  </span>
+                  <span className="text-[10px] font-mono text-cyan-300 font-bold">
+                    {blueMembers.length}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {blueMembers.map((m) => renderRosterRow(m, 'blue'))}
+                  {blueMembers.length === 0 && (
+                    <div className="text-[10px] font-mono text-slate-500 text-center py-4">
+                      [ NO BLUE PILOTS ]
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onSelectTeam('blue')}
+                  disabled={localTeam === 'blue'}
+                  className={`mt-auto w-full py-2 text-[10px] font-black uppercase tracking-widest clip-chamfer transition ${
+                    localTeam === 'blue'
+                      ? 'bg-cyan-500/15 border border-cyan-400/50 text-cyan-300 cursor-default'
+                      : 'bg-blue-600 hover:bg-blue-500 text-white cursor-pointer'
+                  }`}
+                >
+                  {localTeam === 'blue' ? 'Your Active Squad' : 'Switch to Blue'}
+                </button>
+              </div>
 
-            {/* Red Squad Column */}
-            <div className="bg-slate-950/75 border border-rose-500/35 p-3 clip-chamfer flex flex-col gap-2">
-              <div className="flex items-center justify-between border-b border-rose-500/20 pb-2">
-                <span className="text-xs font-black text-red-shimmer uppercase tracking-wider flex items-center gap-1.5">
-                  <Flag className="w-3.5 h-3.5 text-rose-400" />
-                  Red Squad
-                </span>
-                <span className="text-[10px] font-mono text-rose-300 font-bold">
-                  {redMembers.length}
-                </span>
+              {/* Red Squad Column */}
+              <div className="bg-slate-950/75 border border-rose-500/35 p-3 clip-chamfer flex flex-col gap-2">
+                <div className="flex items-center justify-between border-b border-rose-500/20 pb-2">
+                  <span className="text-xs font-black text-red-shimmer uppercase tracking-wider flex items-center gap-1.5">
+                    <Flag className="w-3.5 h-3.5 text-rose-400" />
+                    Red Squad
+                  </span>
+                  <span className="text-[10px] font-mono text-rose-300 font-bold">
+                    {redMembers.length}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {redMembers.map((m) => renderRosterRow(m, 'red'))}
+                  {redMembers.length === 0 && (
+                    <div className="text-[10px] font-mono text-slate-500 text-center py-4">
+                      [ NO RED PILOTS ]
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onSelectTeam('red')}
+                  disabled={localTeam === 'red'}
+                  className={`mt-auto w-full py-2 text-[10px] font-black uppercase tracking-widest clip-chamfer transition ${
+                    localTeam === 'red'
+                      ? 'bg-rose-500/15 border border-rose-400/50 text-rose-300 cursor-default'
+                      : 'bg-rose-600 hover:bg-rose-500 text-white cursor-pointer'
+                  }`}
+                >
+                  {localTeam === 'red' ? 'Your Active Squad' : 'Switch to Red'}
+                </button>
               </div>
-              <div className="flex flex-col gap-1.5">
-                {redMembers.map((m) => renderRosterRow(m, 'red'))}
-                {redMembers.length === 0 && (
-                  <div className="text-[10px] font-mono text-slate-500 text-center py-4">
-                    [ NO RED PILOTS ]
-                  </div>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => onSelectTeam('red')}
-                disabled={localTeam === 'red'}
-                className={`mt-auto w-full py-2 text-[10px] font-black uppercase tracking-widest clip-chamfer transition ${
-                  localTeam === 'red'
-                    ? 'bg-rose-500/15 border border-rose-400/50 text-rose-300 cursor-default'
-                    : 'bg-rose-600 hover:bg-rose-500 text-white cursor-pointer'
-                }`}
-              >
-                {localTeam === 'red' ? 'Your Active Squad' : 'Switch to Red'}
-              </button>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
@@ -349,6 +377,12 @@ interface MatchRulesModalProps {
   onClose: () => void;
 }
 
+const RULES_MODE_ICON: Record<GameMode, typeof Flag> = {
+  ctf: Flag,
+  tdm: Crosshair,
+  ffa: Swords,
+};
+
 export function MatchRulesModal({
   isOpen,
   isHost,
@@ -357,6 +391,9 @@ export function MatchRulesModal({
   onClose,
 }: MatchRulesModalProps) {
   if (!isOpen) return null;
+
+  const isCTF = matchRules.mode === 'ctf';
+  const timePresets: MatchTimeLimitPreset[] = isCTF ? [0, 180, 300, 480] : [180, 300, 480];
 
   return (
     <div
@@ -372,12 +409,12 @@ export function MatchRulesModal({
             <SlidersHorizontal className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0" />
             <div className="min-w-0">
               <h3 className="text-xs sm:text-sm font-black text-white tracking-wider uppercase font-mono truncate">
-                Match Rules &amp; Engagement
+                Match Mode &amp; Rules
               </h3>
               <span className="text-[9px] font-mono text-slate-400 uppercase block truncate">
                 {isHost
                   ? 'Changes broadcast live to all connected cadets'
-                  : 'Rules locked & synchronized by squad host'}
+                  : 'Mode & rules locked & synchronized by squad host'}
               </span>
             </div>
           </div>
@@ -395,40 +432,83 @@ export function MatchRulesModal({
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto cyber-scroll p-3.5 sm:tall:p-5 short:p-3 bg-slate-950/65 space-y-4 sm:tall:space-y-5 short:space-y-3">
+          {/* Game Mode Selector */}
           <div>
             <div className="flex items-center justify-between gap-2 mb-1.5 sm:tall:mb-2">
               <span className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-cyan-300">
-                <Trophy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                Capture Limit (First To)
+                <Skull className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                Game Mode
               </span>
-              <span className="text-[10px] font-mono text-slate-400 shrink-0">
-                {matchRules.targetCaptures}{' '}
-                {matchRules.targetCaptures === 1 ? 'Capture' : 'Captures'}
+              <span className="text-[10px] font-mono text-amber-300 uppercase shrink-0">
+                {GAME_MODE_META[matchRules.mode].label}
               </span>
             </div>
-            <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-              {([1, 3, 5, 7] as TargetCapturesPreset[]).map((cap) => {
-                const active = matchRules.targetCaptures === cap;
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+              {GAME_MODES.map((m) => {
+                const active = matchRules.mode === m;
+                const Icon = RULES_MODE_ICON[m];
+                const meta = GAME_MODE_META[m];
                 return (
                   <button
-                    key={cap}
+                    key={m}
                     type="button"
                     disabled={!isHost}
-                    onClick={() => onUpdateRules({ targetCaptures: cap })}
-                    className={`py-2 short:py-1.5 px-1.5 sm:px-2 border text-[11px] sm:text-xs font-mono font-black uppercase clip-chamfer transition ${
+                    onClick={() => onUpdateRules({ mode: m })}
+                    className={`py-2 short:py-1.5 px-2 border text-[10px] sm:text-xs font-mono font-black uppercase clip-chamfer transition flex flex-col items-center gap-1 ${
                       active
-                        ? 'bg-cyan-500/25 border-cyan-400 text-cyan-200 glow-cyan'
+                        ? 'bg-amber-500/20 border-amber-400 text-amber-200 glow-amber'
                         : isHost
-                          ? 'bg-slate-900/80 border-slate-700/80 text-slate-400 hover:border-cyan-400/50 hover:text-white cursor-pointer'
+                          ? 'bg-slate-900/80 border-slate-700/80 text-slate-400 hover:border-amber-400/50 hover:text-white cursor-pointer'
                           : 'bg-slate-900/50 border-slate-800 text-slate-500 cursor-default'
                     }`}
                   >
-                    FT{cap}
+                    <Icon className="w-3.5 h-3.5 shrink-0" />
+                    <span>{meta.shortLabel}</span>
                   </button>
                 );
               })}
             </div>
+            <p className="text-[10px] font-mono text-slate-400 mt-1.5 leading-snug">
+              {GAME_MODE_META[matchRules.mode].description}
+            </p>
           </div>
+
+          {isCTF && (
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-1.5 sm:tall:mb-2">
+                <span className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-cyan-300">
+                  <Trophy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  Capture Limit (First To)
+                </span>
+                <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                  {matchRules.targetCaptures}{' '}
+                  {matchRules.targetCaptures === 1 ? 'Capture' : 'Captures'}
+                </span>
+              </div>
+              <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+                {([1, 3, 5, 7] as TargetCapturesPreset[]).map((cap) => {
+                  const active = matchRules.targetCaptures === cap;
+                  return (
+                    <button
+                      key={cap}
+                      type="button"
+                      disabled={!isHost}
+                      onClick={() => onUpdateRules({ targetCaptures: cap })}
+                      className={`py-2 short:py-1.5 px-1.5 sm:px-2 border text-[11px] sm:text-xs font-mono font-black uppercase clip-chamfer transition ${
+                        active
+                          ? 'bg-cyan-500/25 border-cyan-400 text-cyan-200 glow-cyan'
+                          : isHost
+                            ? 'bg-slate-900/80 border-slate-700/80 text-slate-400 hover:border-cyan-400/50 hover:text-white cursor-pointer'
+                            : 'bg-slate-900/50 border-slate-800 text-slate-500 cursor-default'
+                      }`}
+                    >
+                      FT{cap}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div>
             <div className="flex items-center justify-between gap-2 mb-1.5 sm:tall:mb-2">
@@ -439,11 +519,13 @@ export function MatchRulesModal({
               <span className="text-[10px] font-mono text-slate-400 shrink-0">
                 {matchRules.timeLimitSec === 0
                   ? 'No Time Limit'
-                  : `${formatClockPreset(matchRules.timeLimitSec)} + OT`}
+                  : matchRules.mode === 'ffa'
+                    ? `${formatClockPreset(matchRules.timeLimitSec)} Timed`
+                    : `${formatClockPreset(matchRules.timeLimitSec)} + OT`}
               </span>
             </div>
-            <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-              {([0, 180, 300, 480] as MatchTimeLimitPreset[]).map((sec) => {
+            <div className={`grid gap-1.5 sm:gap-2 ${timePresets.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+              {timePresets.map((sec) => {
                 const active = matchRules.timeLimitSec === sec;
                 return (
                   <button
@@ -466,7 +548,11 @@ export function MatchRulesModal({
             </div>
             {matchRules.timeLimitSec > 0 && (
               <p className="text-[10px] font-mono text-amber-300/85 mt-1.5 leading-snug">
-                If tied when the clock hits 0:00, Sudden-Death Overtime begins — next capture wins!
+                {matchRules.mode === 'ctf'
+                  ? 'If tied when the clock hits 0:00, Sudden-Death Overtime begins — next capture wins!'
+                  : matchRules.mode === 'tdm'
+                    ? 'Team with the most kills at 0:00 wins. Ties enter Sudden-Death Overtime — next kill wins!'
+                    : 'Every pilot fights solo. 1st, 2nd & 3rd place are decided by kill count at 0:00!'}
               </p>
             )}
           </div>

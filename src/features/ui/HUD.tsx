@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePlayerStore } from '../player/playerStore';
 import { useCombatStore } from '../combat/combatStore';
-import { useMatchStatsStore, formatWeaponShortLabel } from '../combat/statsStore';
+import { useMatchStatsStore, sortFFAStandings, formatWeaponShortLabel } from '../combat/statsStore';
 import type { WeaponType } from '../combat/types';
 import { useCTFStore, type BannerTone } from '../ctf/ctfStore';
 import { useNetworkStore } from '../network/networkStore';
@@ -199,12 +199,23 @@ export function HUD({ onExitToWarRoom, onAbortRoom }: HUDProps) {
         ? 100
         : 20;
 
+  const gameMode = matchRules.mode;
+  const isFFA = gameMode === 'ffa';
   const showScoreboard = tabHeld || manualScoreboardOpen;
   const allStats = Object.values(statsByPlayerId);
   const sortRoster = (a: (typeof allStats)[number], b: (typeof allStats)[number]) =>
-    b.captures * 100 + b.kills * 10 - b.deaths - (a.captures * 100 + a.kills * 10 - a.deaths);
+    gameMode === 'tdm'
+      ? b.kills * 100 - b.deaths - (a.kills * 100 - a.deaths)
+      : b.captures * 100 + b.kills * 10 - b.deaths - (a.captures * 100 + a.kills * 10 - a.deaths);
   const blueStats = allStats.filter((s) => s.team === 'blue').sort(sortRoster);
   const redStats = allStats.filter((s) => s.team === 'red').sort(sortRoster);
+  const ffaStats = sortFFAStandings(allStats);
+  const ffaLeader = ffaStats[0] ?? null;
+  const localFfaRankIdx = ffaStats.findIndex((s) => s.playerId === player.id);
+  const localFfaRank = localFfaRankIdx >= 0 ? localFfaRankIdx + 1 : 1;
+  const localFfaKills =
+    (localFfaRankIdx >= 0 ? ffaStats[localFfaRankIdx]?.kills : statsByPlayerId[player.id]?.kills) ??
+    0;
 
   const visibleKillFeed = isTouchHUD ? killFeed.slice(-2) : killFeed;
 
@@ -259,12 +270,12 @@ export function HUD({ onExitToWarRoom, onAbortRoom }: HUDProps) {
               >
                 <div className="hidden md:flex flex-col pr-2 border-r border-slate-700/70">
                   <span className="text-[9px] font-mono text-slate-400 uppercase tracking-widest leading-none flex items-center gap-1">
-                    {highContrast && (
+                    {!isFFA && highContrast && (
                       <span className={isBlue ? 'text-cyan-300' : 'text-rose-400'}>
                         {isBlue ? '◆' : '▲'}
                       </span>
                     )}
-                    {isBlue ? 'Blue Unit' : 'Red Unit'}
+                    {isFFA ? 'FFA Solo' : isBlue ? 'Blue Unit' : 'Red Unit'}
                   </span>
                   <span className="text-xs font-black text-white font-mono leading-tight max-w-[96px] truncate">
                     {player.avatar.callsign}
@@ -359,26 +370,10 @@ export function HUD({ onExitToWarRoom, onAbortRoom }: HUDProps) {
                 </div>
               </div>
 
-              {player.carryingFlag && (
-                <div
-                  className={`px-2 py-0.5 text-[10px] font-mono font-black uppercase tracking-wider clip-chamfer flex items-center gap-1.5 animate-pulse pointer-events-none border ${
-                    flags[player.team].status === 'at_base'
-                      ? 'bg-amber-950/90 border-amber-400/70 text-amber-200 glow-amber'
-                      : 'bg-rose-950/90 border-rose-400/75 text-rose-200 glow-red'
-                  }`}
-                >
-                  <Flag
-                    className={`w-3 h-3 shrink-0 ${
-                      flags[player.team].status === 'at_base' ? 'text-amber-300' : 'text-rose-300'
-                    }`}
-                  />
-                  <span>
-                    {flags[player.team].status === 'at_base'
-                      ? 'Flag Secured • Return to Base'
-                      : flags[player.team].status === 'carried'
-                        ? 'Own Flag Stolen • Recover Flag to Score'
-                        : `Own Flag Dropped (${Math.max(1, Math.ceil(flags[player.team].returnTimer))}s) • Return to Score`}
-                  </span>
+              {gameMode === 'ctf' && player.carryingFlag && (
+                <div className="px-2 py-0.5 text-[10px] font-mono font-black uppercase tracking-wider clip-chamfer flex items-center gap-1.5 animate-pulse pointer-events-none border bg-emerald-950/90 border-emerald-400/75 text-emerald-200 glow-cyan">
+                  <Flag className="w-3 h-3 shrink-0 text-emerald-300" />
+                  <span>Enemy Flag Secured • Return to Base</span>
                 </div>
               )}
 
@@ -387,8 +382,20 @@ export function HUD({ onExitToWarRoom, onAbortRoom }: HUDProps) {
                 <div className="mt-0.5 flex flex-col items-start gap-1 pointer-events-none max-w-[196px] xs:max-w-[240px] sm:max-w-[300px]">
                   {visibleKillFeed.map((evt) => {
                     const isHazardOrSelf = evt.weaponType === 'hazard' || evt.weaponType === 'self';
-                    const killerColor = evt.killerTeam === 'blue' ? 'text-cyan-300' : 'text-rose-300';
-                    const victimColor = evt.victimTeam === 'blue' ? 'text-cyan-300' : 'text-rose-300';
+                    const killerColor = isFFA
+                      ? evt.killerId === player.id
+                        ? 'text-cyan-300'
+                        : 'text-amber-300'
+                      : evt.killerTeam === 'blue'
+                        ? 'text-cyan-300'
+                        : 'text-rose-300';
+                    const victimColor = isFFA
+                      ? evt.victimId === player.id
+                        ? 'text-cyan-300'
+                        : 'text-rose-300'
+                      : evt.victimTeam === 'blue'
+                        ? 'text-cyan-300'
+                        : 'text-rose-300';
                     return (
                       <div
                         key={evt.id}
@@ -424,7 +431,7 @@ export function HUD({ onExitToWarRoom, onAbortRoom }: HUDProps) {
               )}
             </div>
 
-            {/* Top-Center: Clean CTF Scoreboard Pill */}
+            {/* Top-Center: Mode-Aware Scoreboard Pill */}
             <div
               className={`cyber-panel clip-chamfer ${
                 hudScale === 'compact'
@@ -434,67 +441,125 @@ export function HUD({ onExitToWarRoom, onAbortRoom }: HUDProps) {
                     : 'px-2 xs:px-2.5 py-1 sm:px-4 sm:py-1.5'
               } flex items-center gap-1.5 xs:gap-2 sm:gap-3 border border-cyan-500/35 pointer-events-auto shrink-0`}
             >
-              <div className="flex items-center gap-1 xs:gap-1.5">
-                {highContrast && <span className="text-[10px] text-cyan-300">◆</span>}
-                <Flag
-                  className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${
-                    flags.blue.status !== 'at_base'
-                      ? 'text-amber-400 animate-pulse'
-                      : 'text-cyan-400'
-                  }`}
-                />
-                <span className="hidden sm:inline text-[10px] font-mono font-bold text-cyan-300/80 uppercase tracking-wider">
-                  Blue
-                </span>
-                <span className={`${scoreDigitCls} font-black text-cyan-300 font-mono leading-none`}>
-                  {score.blue}
-                </span>
-              </div>
+              {isFFA ? (
+                <>
+                  <div className="flex items-center gap-1 xs:gap-1.5">
+                    <span className="px-1 py-0.5 text-[9px] font-mono font-black bg-amber-500/20 border border-amber-400/50 text-amber-300">
+                      #1
+                    </span>
+                    <span className="hidden sm:inline text-[10px] font-mono font-bold text-amber-200 max-w-[78px] truncate">
+                      {ffaLeader ? ffaLeader.callsign : 'FFA'}
+                    </span>
+                    <span className={`${scoreDigitCls} font-black text-amber-300 font-mono leading-none tabular-nums`}>
+                      {ffaLeader ? ffaLeader.kills : 0}
+                    </span>
+                  </div>
 
-              <div className="flex items-center gap-1.5 text-slate-500 font-mono text-xs font-black">
-                {isOvertime ? (
-                  <span
-                    className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 bg-amber-500/20 border border-amber-400/70 text-amber-300 animate-pulse"
-                    title="Sudden-Death Overtime — Next capture wins!"
-                  >
-                    OT
-                  </span>
-                ) : matchRules.timeLimitSec > 0 ? (
-                  <span
-                    className={`text-[10px] sm:text-xs font-black tabular-nums px-1.5 border-x border-slate-700/70 ${
-                      timeRemainingSec <= 10
-                        ? 'text-rose-400 animate-pulse'
-                        : timeRemainingSec <= 30
-                          ? 'text-amber-300'
-                          : 'text-slate-200'
-                    }`}
-                    title={`First to ${targetCaptures} Captures`}
-                  >
-                    {formatMatchClock(timeRemainingSec)}
-                  </span>
-                ) : (
-                  <span className="text-[10px] text-slate-400 uppercase tracking-widest border-x border-slate-700/70 px-1.5">
-                    FT{targetCaptures}
-                  </span>
-                )}
-              </div>
+                  <div className="flex items-center gap-1.5 text-slate-500 font-mono text-xs font-black">
+                    <span
+                      className={`text-[10px] sm:text-xs font-black tabular-nums px-1.5 border-x border-slate-700/70 ${
+                        timeRemainingSec <= 10
+                          ? 'text-rose-400 animate-pulse'
+                          : timeRemainingSec <= 30
+                            ? 'text-amber-300'
+                            : 'text-slate-200'
+                      }`}
+                      title="Free For All — Top 3 Kills Win"
+                    >
+                      {formatMatchClock(timeRemainingSec)}
+                    </span>
+                  </div>
 
-              <div className="flex items-center gap-1 xs:gap-1.5">
-                <span className={`${scoreDigitCls} font-black text-rose-400 font-mono leading-none`}>
-                  {score.red}
-                </span>
-                <span className="hidden sm:inline text-[10px] font-mono font-bold text-rose-300/80 uppercase tracking-wider">
-                  Red
-                </span>
-                <Flag
-                  className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${
-                    flags.red.status !== 'at_base'
-                      ? 'text-amber-400 animate-pulse'
-                      : 'text-rose-400'
-                  }`}
-                />
-                {highContrast && <span className="text-[10px] text-rose-400">▲</span>}
-              </div>
+                  <div className="flex items-center gap-1 xs:gap-1.5">
+                    <span className={`${scoreDigitCls} font-black text-cyan-300 font-mono leading-none tabular-nums`}>
+                      {localFfaKills}
+                    </span>
+                    <span className="text-[9px] sm:text-[10px] font-mono font-black text-cyan-300/90 uppercase">
+                      YOU #{localFfaRank}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-1 xs:gap-1.5">
+                    {highContrast && <span className="text-[10px] text-cyan-300">◆</span>}
+                    {gameMode === 'ctf' ? (
+                      <Flag
+                        className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${
+                          flags.blue.status !== 'at_base'
+                            ? 'text-amber-400 animate-pulse'
+                            : 'text-cyan-400'
+                        }`}
+                      />
+                    ) : (
+                      <Skull className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-cyan-400" />
+                    )}
+                    <span className="hidden sm:inline text-[10px] font-mono font-bold text-cyan-300/80 uppercase tracking-wider">
+                      Blue
+                    </span>
+                    <span className={`${scoreDigitCls} font-black text-cyan-300 font-mono leading-none`}>
+                      {score.blue}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 text-slate-500 font-mono text-xs font-black">
+                    {isOvertime ? (
+                      <span
+                        className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 bg-amber-500/20 border border-amber-400/70 text-amber-300 animate-pulse"
+                        title={
+                          gameMode === 'tdm'
+                            ? 'Sudden-Death Overtime — Next kill wins!'
+                            : 'Sudden-Death Overtime — Next capture wins!'
+                        }
+                      >
+                        OT
+                      </span>
+                    ) : matchRules.timeLimitSec > 0 ? (
+                      <span
+                        className={`text-[10px] sm:text-xs font-black tabular-nums px-1.5 border-x border-slate-700/70 ${
+                          timeRemainingSec <= 10
+                            ? 'text-rose-400 animate-pulse'
+                            : timeRemainingSec <= 30
+                              ? 'text-amber-300'
+                              : 'text-slate-200'
+                        }`}
+                        title={
+                          gameMode === 'tdm'
+                            ? 'Team Kills • Most Kills Wins'
+                            : `First to ${targetCaptures} Captures`
+                        }
+                      >
+                        {formatMatchClock(timeRemainingSec)}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 uppercase tracking-widest border-x border-slate-700/70 px-1.5">
+                        FT{targetCaptures}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1 xs:gap-1.5">
+                    <span className={`${scoreDigitCls} font-black text-rose-400 font-mono leading-none`}>
+                      {score.red}
+                    </span>
+                    <span className="hidden sm:inline text-[10px] font-mono font-bold text-rose-300/80 uppercase tracking-wider">
+                      Red
+                    </span>
+                    {gameMode === 'ctf' ? (
+                      <Flag
+                        className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${
+                          flags.red.status !== 'at_base'
+                            ? 'text-amber-400 animate-pulse'
+                            : 'text-rose-400'
+                        }`}
+                      />
+                    ) : (
+                      <Skull className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-400" />
+                    )}
+                    {highContrast && <span className="text-[10px] text-rose-400">▲</span>}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Top-Right: Streamlined Ergonomic Actions (Voice + Scoreboard + Menu/Pause) */}
@@ -779,6 +844,7 @@ export function HUD({ onExitToWarRoom, onAbortRoom }: HUDProps) {
         score={score}
         blueStats={blueStats}
         redStats={redStats}
+        ffaStats={ffaStats}
         localPlayerId={player.id}
         isTouchHUD={isTouchHUD}
       />

@@ -223,7 +223,13 @@ export const App = () => {
       mapStore.selectMap(mapId);
       useMatchStatsStore.getState().resetStats();
       useCombatStore.getState().initLoadout(useSettingsStore.getState().defaultWeapon);
-      usePlayerStore.getState().spawnAtTeamBase(targetMap, useAvatarStore.getState().playerId);
+      usePlayerStore
+        .getState()
+        .spawnAtTeamBase(
+          targetMap,
+          useAvatarStore.getState().playerId,
+          useCTFStore.getState().matchRules.mode,
+        );
       useCTFStore.getState().prepareClientArena(targetMap);
       setScreen('in_game');
     });
@@ -245,7 +251,9 @@ export const App = () => {
       stats.resetStats();
       useCombatStore.getState().initLoadout(useSettingsStore.getState().defaultWeapon);
       const myId = useAvatarStore.getState().playerId;
-      usePlayerStore.getState().spawnAtTeamBase(targetMap, myId);
+      usePlayerStore
+        .getState()
+        .spawnAtTeamBase(targetMap, myId, useCTFStore.getState().matchRules.mode);
       const localP = usePlayerStore.getState().player;
       stats.registerParticipant(myId, localP.avatar.callsign, localP.team);
       for (const m of Object.values(useNetworkStore.getState().roster)) {
@@ -275,7 +283,9 @@ export const App = () => {
       stats.resetStats();
       useCombatStore.getState().initLoadout(useSettingsStore.getState().defaultWeapon);
       const myId = useAvatarStore.getState().playerId;
-      usePlayerStore.getState().spawnAtTeamBase(targetMap, myId);
+      usePlayerStore
+        .getState()
+        .spawnAtTeamBase(targetMap, myId, useCTFStore.getState().matchRules.mode);
       const localP = usePlayerStore.getState().player;
       stats.registerParticipant(myId, localP.avatar.callsign, localP.team);
       for (const m of Object.values(useNetworkStore.getState().roster)) {
@@ -315,11 +325,13 @@ export const App = () => {
     if (config?.mapId) {
       mapStore.selectMap(config.mapId);
     }
+    const resolvedMode = config?.mode ?? engineWorld.soloConfig.mode ?? 'ctf';
     if (config) {
       engineWorld.setSoloConfig({
         squadSize: config.squadSize,
         difficulty: config.difficulty,
         playerTeam: config.playerTeam,
+        mode: resolvedMode,
       });
       usePlayerStore.getState().setTeam(config.playerTeam);
     }
@@ -328,27 +340,31 @@ export const App = () => {
       useMapStore.getState().selectedMap;
     useMatchStatsStore.getState().resetStats();
     useCombatStore.getState().initLoadout(useSettingsStore.getState().defaultWeapon);
-    usePlayerStore.getState().spawnAtTeamBase(targetMap, useAvatarStore.getState().playerId);
     initMatch(
       targetMap,
       config
         ? {
+            mode: resolvedMode,
             targetCaptures: config.targetCaptures,
             timeLimitSec: config.timeLimitSec,
           }
         : undefined,
     );
+    usePlayerStore
+      .getState()
+      .spawnAtTeamBase(targetMap, useAvatarStore.getState().playerId, resolvedMode);
     setScreen('in_game');
   };
 
   const handleStartMatch = () => {
     clearOptimisticClaims();
     const currentMap = useMapStore.getState().selectedMap;
+    const currentMode = useCTFStore.getState().matchRules.mode;
     const stats = useMatchStatsStore.getState();
     stats.resetStats();
     useCombatStore.getState().initLoadout(useSettingsStore.getState().defaultWeapon);
     const myId = useAvatarStore.getState().playerId;
-    usePlayerStore.getState().spawnAtTeamBase(currentMap, myId);
+    usePlayerStore.getState().spawnAtTeamBase(currentMap, myId, currentMode);
     const localP = usePlayerStore.getState().player;
     stats.registerParticipant(myId, localP.avatar.callsign, localP.team);
 

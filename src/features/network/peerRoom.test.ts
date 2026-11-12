@@ -170,6 +170,7 @@ describe('PeerNetworkManager 2-peer protocol, security, and cooldown sync', () =
 
   it('isolates duplicate callsigns by playerId & slot and only marks disconnected peer offline', () => {
     const hostPeer = setupHost('DUP111', {
+      mode: 'ctf',
       targetCaptures: 5,
       timeLimitSec: 180,
       respawnDelaySec: 2.5,
@@ -205,6 +206,7 @@ describe('PeerNetworkManager 2-peer protocol, security, and cooldown sync', () =
 
     expect(joinResMsg?.payload.accepted).toBe(true);
     expect(joinResMsg?.payload.matchRules).toEqual({
+      mode: 'ctf',
       targetCaptures: 5,
       timeLimitSec: 180,
       respawnDelaySec: 2.5,

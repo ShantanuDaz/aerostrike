@@ -183,6 +183,7 @@ function handleDamageMessage(
         remoteTarget,
         isInActiveBattle: ctx.isInActiveBattle,
         gamePhase,
+        mode: useCTFStore.getState().matchRules.mode,
         rateTracker: ctx.damageRateTracker,
       })
     ) {
@@ -268,7 +269,7 @@ function handleDamageMessage(
       });
     }
 
-    if (wasKilled && carryingBefore) {
+    if (wasKilled && carryingBefore && useCTFStore.getState().matchRules.mode === 'ctf') {
       const enemyTeam = localPlayer.team === 'blue' ? 'red' : 'blue';
       const updatedLocal = engineWorld.localPlayer ?? localPlayer;
       if (!ctx.isHostRole) {
@@ -294,18 +295,21 @@ function handleKillFeedMessage(
 ) {
   if (ctx.isHostRole) {
     const senderMember = senderPeerId ? ctx.findMemberByPeerId(senderPeerId) : undefined;
+    const mode = useCTFStore.getState().matchRules.mode;
     const validated = validateIncomingKillFeed(
       msg.payload,
       senderPeerId,
       senderMember,
       ctx.isInActiveBattle,
       gamePhase,
+      mode,
     );
     if (!validated) return;
     ctx.sendToNetwork({ kind: 'kill_feed', senderId: msg.senderId, payload: validated }, senderPeerId);
-    useMatchStatsStore.getState().recordKill(validated);
+    useCTFStore.getState().recordAuthoritativeKill(validated);
   } else {
-    useMatchStatsStore.getState().recordKill(msg.payload);
+    // Non-host peers display the kill feed notification while Host stays the tally authority.
+    useMatchStatsStore.getState().recordKillFeedOnly(msg.payload);
   }
 }
 
@@ -328,6 +332,7 @@ function handleFlagMessage(
     ctf.flags,
     ctx.isInActiveBattle,
     ctf.matchStatus,
+    ctf.matchRules.mode,
   );
   if (!cmd) return;
 

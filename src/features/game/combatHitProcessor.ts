@@ -35,6 +35,7 @@ export interface HazardKillContext {
   getRemote?: (id: string) => { id: string; team: Team; callsign: string } | undefined;
   isMultiplayer: boolean;
   nowMs: number;
+  allowFriendlyFire?: boolean;
 }
 
 /**
@@ -53,6 +54,7 @@ export function resolveHazardKillAttribution(ctx: HazardKillContext): KillFeedEv
     getRemote,
     isMultiplayer,
     nowMs,
+    allowFriendlyFire = false,
   } = ctx;
 
   const isRecentAttacker =
@@ -64,7 +66,7 @@ export function resolveHazardKillAttribution(ctx: HazardKillContext): KillFeedEv
   if (isRecentAttacker) {
     const dealerIsLocal =
       recentAttacker.dealerId === localPlayer.id || recentAttacker.dealerId === localPlayerId;
-    if (dealerIsLocal && localPlayer.team !== victimTeam) {
+    if (dealerIsLocal && (allowFriendlyFire || localPlayer.team !== victimTeam)) {
       return {
         id: `kill_${victimId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         killerId: localPlayerId,
@@ -79,7 +81,7 @@ export function resolveHazardKillAttribution(ctx: HazardKillContext): KillFeedEv
 
     if (!isMultiplayer && getBot) {
       const attackerBot = getBot(recentAttacker.dealerId);
-      if (attackerBot && attackerBot.team !== victimTeam) {
+      if (attackerBot && (allowFriendlyFire || attackerBot.team !== victimTeam)) {
         return {
           id: `kill_${victimId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
           killerId: attackerBot.id,
@@ -95,7 +97,7 @@ export function resolveHazardKillAttribution(ctx: HazardKillContext): KillFeedEv
 
     if (isMultiplayer && getRemote) {
       const attackerRemote = getRemote(recentAttacker.dealerId);
-      if (attackerRemote && attackerRemote.team !== victimTeam) {
+      if (attackerRemote && (allowFriendlyFire || attackerRemote.team !== victimTeam)) {
         return {
           id: `kill_${victimId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
           killerId: attackerRemote.id,
@@ -160,6 +162,7 @@ export function processBulletHits(params: ProcessBulletHitsParams) {
 
   const playerStore = usePlayerStore.getState();
   const ctfStore = useCTFStore.getState();
+  const isCTFMode = ctfStore.matchRules.mode === 'ctf';
 
   for (const hit of hits) {
     if (hit.damage <= 0) continue;
@@ -226,7 +229,7 @@ export function processBulletHits(params: ProcessBulletHitsParams) {
         if (isMultiplayer) {
           networkManager.broadcastKillFeed(killEvt);
         } else {
-          useMatchStatsStore.getState().recordKill(killEvt);
+          useCTFStore.getState().recordAuthoritativeKill(killEvt);
         }
         useMatchStatsStore.getState().setLocalDeathSummary({
           killerCallsign: killEvt.killerCallsign,
@@ -235,7 +238,7 @@ export function processBulletHits(params: ProcessBulletHitsParams) {
           atMs: Date.now(),
         });
 
-        if (carryingBeforeHit) {
+        if (isCTFMode && carryingBeforeHit) {
           const enemyTeam: Team = localTeam === 'blue' ? 'red' : 'blue';
           const updatedLocal = engineWorld.localPlayer ?? targetLocal;
           if (isAuthoritativeCTF) {
@@ -304,14 +307,14 @@ export function processBulletHits(params: ProcessBulletHitsParams) {
           createSparks(targetBot.player.x, targetBot.player.y, 14, '#ef4444'),
         );
 
-        if (botCarryingBefore) {
+        if (isCTFMode && botCarryingBefore) {
           const droppedTeam: Team = targetBot.team === 'blue' ? 'red' : 'blue';
           ctfStore.dropFlag(droppedTeam, targetBot.player.x, targetBot.player.y);
         }
 
         const dealerBot = !isFromLocal ? engineWorld.getSoloBot(hit.dealerId) : undefined;
         const isSelfKill = hit.dealerId === targetBot.id;
-        useMatchStatsStore.getState().recordKill({
+        useCTFStore.getState().recordAuthoritativeKill({
           id: `kill_${targetBot.id}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
           killerId: isFromLocal ? myPlayerId : dealerBot?.id ?? hit.dealerId,
           killerCallsign: isFromLocal

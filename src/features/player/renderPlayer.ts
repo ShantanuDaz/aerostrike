@@ -1,5 +1,6 @@
 import type { Player } from './types';
 import type { WeaponType } from '../combat/types';
+import type { GameMode } from '../ctf/types';
 import { renderAvatar } from '../avatar/renderAvatar';
 import { renderCarriedFlag } from '../ctf/renderFlags';
 
@@ -12,6 +13,7 @@ export function renderPlayer(
   isLocal: boolean = false,
   cameraZoom: number = 1,
   highContrast: boolean = false,
+  mode: GameMode = 'ctf',
 ): void {
   // If player is dead, ragdoll physics renders their body — draw subtle respawn tag for remote teammates/enemies
   if (player.isDead) {
@@ -66,8 +68,8 @@ export function renderPlayer(
     ctx.restore();
   }
 
-  // 2. Carried Flag (waving from upper back)
-  if (player.carryingFlag) {
+  // 2. Carried Flag (waving from upper back, CTF only)
+  if (mode === 'ctf' && player.carryingFlag) {
     const enemyTeam = player.team === 'blue' ? 'red' : 'blue';
     renderCarriedFlag(ctx, enemyTeam, timeSec);
   }
@@ -77,7 +79,7 @@ export function renderPlayer(
     aimAngle: player.aimAngle,
     radius: player.radius,
     isBoosting,
-    team: player.team,
+    team: mode === 'ffa' ? undefined : player.team,
     healthPercent: player.health / player.maxHealth,
     fuelPercent: player.boostFuel / player.maxFuel,
     showHUD: !isLocal,

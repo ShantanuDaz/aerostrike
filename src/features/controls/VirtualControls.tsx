@@ -22,6 +22,7 @@ import {
 import { Bomb, ChevronUp, Crosshair, RefreshCw, Wind } from 'lucide-react';
 
 interface VirtualControlsProps {
+  onFire?: (aimAngleOverride?: number) => void;
   onSwitchWeapon: () => void;
   onThrowGrenade: () => void;
 }
@@ -47,7 +48,7 @@ function getStickCenter(el: HTMLDivElement | null): StickCenter | null {
   };
 }
 
-export function VirtualControls({ onSwitchWeapon, onThrowGrenade }: VirtualControlsProps) {
+export function VirtualControls({ onFire, onSwitchWeapon, onThrowGrenade }: VirtualControlsProps) {
   const isTouchHUD = useIsTouchHUD();
   const setInput = usePlayerStore((s) => s.setInput);
   const dashCooldown = usePlayerStore((s) => s.player.dashCooldown ?? 0);
@@ -316,14 +317,20 @@ export function VirtualControls({ onSwitchWeapon, onThrowGrenade }: VirtualContr
           setAimFiring(res.isFiring);
 
           if (res.hasAim) {
+            if (engineWorld.localPlayer) {
+              engineWorld.localPlayer.aimAngle = res.angle;
+            }
             setInput({ aimAngle: res.angle, shooting: res.isFiring });
+            if (res.isFiring) {
+              onFire?.(res.angle);
+            }
           } else {
             setInput({ shooting: false });
           }
         }
       }
     },
-    [isTouchHUD, arsenalOpen, setInput],
+    [isTouchHUD, arsenalOpen, setInput, onFire],
   );
 
   const handleTouchMove = useCallback(

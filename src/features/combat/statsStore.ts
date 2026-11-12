@@ -50,8 +50,11 @@ interface MatchStatsStore {
   setLocalDeathSummary: (summary: LocalDeathSummary | null) => void;
   setTacticalMenuOpen: (open: boolean) => void;
   registerParticipant: (playerId: string, callsign: string, team: Team) => void;
-  recordKill: (evt: KillFeedEvent) => void;
+  recordKill: (evt: KillFeedEvent) => boolean;
+  recordKillFeedOnly: (evt: KillFeedEvent) => void;
   recordCapture: (playerId: string, callsign: string, team: Team, captureKey?: string) => void;
+  exportPlayerStats: () => PlayerMatchStats[];
+  applyAuthoritativeStats: (stats?: PlayerMatchStats[]) => void;
   pruneExpiredFeed: () => void;
 }
 
@@ -97,7 +100,7 @@ export const useMatchStatsStore = create<MatchStatsStore>((set, get) => ({
     }),
 
   recordKill: (evt) => {
-    if (seenKillIds.has(evt.id)) return;
+    if (seenKillIds.has(evt.id)) return false;
     seenKillIds.add(evt.id);
     if (seenKillIds.size > 64) {
       const first = seenKillIds.values().next().value;
@@ -159,6 +162,28 @@ export const useMatchStatsStore = create<MatchStatsStore>((set, get) => ({
     });
 
     schedulePrune(() => get().pruneExpiredFeed());
+    return true;
+  },
+
+  recordKillFeedOnly: (evt) => {
+    if (seenKillIds.has(evt.id)) return;
+    seenKillIds.add(evt.id);
+    if (seenKillIds.size > 64) {
+      const first = seenKillIds.values().next().value;
+      if (first !== undefined) seenKillIds.delete(first);
+    }
+
+    const nowMs = Date.now();
+    set((state) => {
+      const item: KillFeedItem = { ...evt, createdAtMs: nowMs };
+      const freshFeed = [
+        ...state.killFeed.filter((k) => nowMs - k.createdAtMs < KILL_FEED_TTL_MS),
+        item,
+      ].slice(-MAX_KILL_FEED);
+      return { killFeed: freshFeed };
+    });
+
+    schedulePrune(() => get().pruneExpiredFeed());
   },
 
   recordCapture: (playerId, callsign, team, captureKey) => {
@@ -194,6 +219,26 @@ export const useMatchStatsStore = create<MatchStatsStore>((set, get) => ({
     });
   },
 
+  exportPlayerStats: () =>
+    Object.values(get().statsByPlayerId).map((s) => ({ ...s })),
+
+  applyAuthoritativeStats: (stats) => {
+    if (!Array.isArray(stats)) return;
+    const nextStats: Record<string, PlayerMatchStats> = {};
+    for (const raw of stats) {
+      if (!raw || typeof raw.playerId !== 'string' || !raw.playerId) continue;
+      nextStats[raw.playerId] = {
+        playerId: raw.playerId,
+        callsign: typeof raw.callsign === 'string' && raw.callsign ? raw.callsign : 'PILOT',
+        team: raw.team === 'red' ? 'red' : 'blue',
+        kills: Number.isFinite(raw.kills) ? Math.max(0, Math.floor(raw.kills)) : 0,
+        deaths: Number.isFinite(raw.deaths) ? Math.max(0, Math.floor(raw.deaths)) : 0,
+        captures: Number.isFinite(raw.captures) ? Math.max(0, Math.floor(raw.captures)) : 0,
+      };
+    }
+    set({ statsByPlayerId: nextStats });
+  },
+
   pruneExpiredFeed: () => {
     const nowMs = Date.now();
     set((state) => {
@@ -207,6 +252,14 @@ export const useMatchStatsStore = create<MatchStatsStore>((set, get) => ({
     }
   },
 }));
+
+export function sortFFAStandings(stats: PlayerMatchStats[]): PlayerMatchStats[] {
+  return [...stats].sort((a, b) => {
+    if (b.kills !== a.kills) return b.kills - a.kills;
+    if (a.deaths !== b.deaths) return a.deaths - b.deaths;
+    return a.callsign.localeCompare(b.callsign) || a.playerId.localeCompare(b.playerId);
+  });
+}
 
 export function formatWeaponShortLabel(weapon: WeaponType | 'hazard' | 'self'): string {
   switch (weapon) {

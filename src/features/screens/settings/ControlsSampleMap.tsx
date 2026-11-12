@@ -111,6 +111,8 @@ export function ControlsSampleMap({
   const [moveStickActive, setMoveStickActive] = useState(false);
   const [aimStickActive, setAimStickActive] = useState(false);
   const [aimFiringPreview, setAimFiringPreview] = useState(false);
+  const moveStickActiveRef = useRef(false);
+  const aimStickActiveRef = useRef(false);
 
   const avatarRef = useRef(avatar);
   const settingsRef = useRef(settings);
@@ -346,6 +348,7 @@ export function ControlsSampleMap({
   };
 
   const resetMovePointer = () => {
+    moveStickActiveRef.current = false;
     setMoveStickActive(false);
     setMoveKnobOffset({ x: 0, y: 0 });
     pilotStateRef.current.moveActive = false;
@@ -374,6 +377,7 @@ export function ControlsSampleMap({
   };
 
   const resetAimPointer = () => {
+    aimStickActiveRef.current = false;
     setAimStickActive(false);
     setAimKnobOffset({ x: 0, y: 0 });
     setAimFiringPreview(false);
@@ -477,11 +481,12 @@ export function ControlsSampleMap({
             e.stopPropagation();
             e.currentTarget.setPointerCapture(e.pointerId);
             onSelectControl('move');
+            moveStickActiveRef.current = true;
             setMoveStickActive(true);
             updateMovePointer(e.clientX, e.clientY, e.currentTarget);
           }}
           onPointerMove={(e) => {
-            if (!moveStickActive) return;
+            if (!moveStickActiveRef.current) return;
             updateMovePointer(e.clientX, e.clientY, e.currentTarget);
           }}
           onPointerUp={resetMovePointer}
@@ -610,11 +615,12 @@ export function ControlsSampleMap({
             e.stopPropagation();
             e.currentTarget.setPointerCapture(e.pointerId);
             onSelectControl('aim');
+            aimStickActiveRef.current = true;
             setAimStickActive(true);
             updateAimPointer(e.clientX, e.clientY, e.currentTarget);
           }}
           onPointerMove={(e) => {
-            if (!aimStickActive) return;
+            if (!aimStickActiveRef.current) return;
             updateAimPointer(e.clientX, e.clientY, e.currentTarget);
           }}
           onPointerUp={resetAimPointer}

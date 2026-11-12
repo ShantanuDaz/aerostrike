@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react';
-import type { MatchTimeLimitPreset, TargetCapturesPreset, Team } from '../../ctf/types';
+import {
+  GAME_MODES,
+  GAME_MODE_META,
+  sanitizeMatchRules,
+  type GameMode,
+  type MatchTimeLimitPreset,
+  type TargetCapturesPreset,
+  type Team,
+} from '../../ctf/types';
 import type { BotDifficulty, SoloSquadSize } from '../../game/botAI';
 import { engineWorld } from '../../game/engineWorld';
 import { useMapStore } from '../../map/mapStore';
@@ -9,17 +17,21 @@ import { formatClockPreset, getCleanMapTitle, getMapModeTag } from '../warRoom/w
 import {
   Bot,
   Clock,
+  Crosshair,
   Flag,
   Gamepad2,
   Map as MapIcon,
   Play,
   Shield,
+  Skull,
+  Swords,
   Trophy,
   Users,
   X,
 } from 'lucide-react';
 
 export interface SoloLaunchConfig {
+  mode: GameMode;
   mapId: string;
   squadSize: SoloSquadSize;
   difficulty: BotDifficulty;
@@ -34,6 +46,12 @@ interface SoloSkirmishModalProps {
   onDeploy: (config: SoloLaunchConfig) => void;
 }
 
+const MODE_ICON: Record<GameMode, typeof Flag> = {
+  ctf: Flag,
+  tdm: Crosshair,
+  ffa: Swords,
+};
+
 export function SoloSkirmishModal({
   isOpen,
   onClose,
@@ -42,6 +60,9 @@ export function SoloSkirmishModal({
   const availableMaps = useMapStore((s) => s.availableMaps);
   const selectedMap = useMapStore((s) => s.selectedMap);
 
+  const [mode, setMode] = useState<GameMode>(
+    () => engineWorld.soloConfig.mode ?? 'ctf',
+  );
   const [mapId, setMapId] = useState<string>(() => selectedMap.id);
   const [squadSize, setSquadSize] = useState<SoloSquadSize>(
     () => engineWorld.soloConfig.squadSize,
@@ -66,16 +87,42 @@ export function SoloSkirmishModal({
 
   if (!isOpen) return null;
 
+  const handleSelectMode = (nextMode: GameMode) => {
+    sounds.playUiClick();
+    setMode(nextMode);
+    const sanitized = sanitizeMatchRules({
+      mode: nextMode,
+      targetCaptures,
+      timeLimitSec,
+    });
+    setTimeLimitSec(sanitized.timeLimitSec);
+  };
+
   const handleDeploy = () => {
     sounds.playUiClick();
+    const sanitized = sanitizeMatchRules({
+      mode,
+      targetCaptures,
+      timeLimitSec,
+    });
     onDeploy({
+      mode: sanitized.mode,
       mapId,
       squadSize,
       difficulty,
       playerTeam,
-      targetCaptures,
-      timeLimitSec,
+      targetCaptures: sanitized.targetCaptures,
+      timeLimitSec: sanitized.timeLimitSec,
     });
+  };
+
+  const timePresets: MatchTimeLimitPreset[] =
+    mode === 'ctf' ? [0, 180, 300, 480] : [180, 300, 480];
+
+  const ffaSizeLabel: Record<SoloSquadSize, string> = {
+    '1v1': '2 Pilots',
+    '2v2': '4 Pilots',
+    '3v3': '6 Pilots',
   };
 
   return (
@@ -115,6 +162,61 @@ export function SoloSkirmishModal({
 
         {/* Scrollable Config Body */}
         <div className="flex-1 min-h-0 overflow-y-auto cyber-scroll p-3.5 sm:p-5 bg-slate-950/65 space-y-4">
+          {/* Game Mode Selector */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-cyan-300">
+                <Skull className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                Game Mode
+              </span>
+              <span className="text-[10px] font-mono text-emerald-300 uppercase">
+                {GAME_MODE_META[mode].shortLabel}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {GAME_MODES.map((m) => {
+                const meta = GAME_MODE_META[m];
+                const Icon = MODE_ICON[m];
+                const active = mode === m;
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => handleSelectMode(m)}
+                    className={`text-left p-2.5 border transition clip-chamfer cursor-pointer flex flex-col gap-1 ${
+                      active
+                        ? 'bg-emerald-950/45 border-emerald-400 glow-cyan'
+                        : 'bg-slate-950/75 border-slate-800 hover:border-cyan-500/45 hover:bg-slate-900/80'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="flex items-center gap-1.5 text-xs font-black text-white uppercase tracking-wide">
+                        <Icon
+                          className={`w-3.5 h-3.5 shrink-0 ${
+                            active ? 'text-emerald-300' : 'text-slate-400'
+                          }`}
+                        />
+                        {meta.label}
+                      </span>
+                      <span
+                        className={`px-1.5 py-0.5 text-[9px] font-mono font-black uppercase ${
+                          active
+                            ? 'bg-emerald-400 text-slate-950'
+                            : 'bg-slate-900 text-slate-400 border border-slate-700/80'
+                        }`}
+                      >
+                        {meta.shortLabel}
+                      </span>
+                    </div>
+                    <p className="text-[10px] font-mono text-slate-400 leading-snug">
+                      {meta.description}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Combat Theater Selector */}
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -171,49 +273,61 @@ export function SoloSkirmishModal({
 
           {/* Side + Squad Format + Difficulty */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* Team Side */}
-            <div className="p-2.5 bg-slate-900/65 border border-slate-800 clip-chamfer space-y-2">
-              <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wider text-slate-300">
-                <Flag className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                Deploy Side
+            {/* Team Side (Hidden in FFA) */}
+            {mode === 'ffa' ? (
+              <div className="p-2.5 bg-slate-900/65 border border-amber-500/35 clip-chamfer flex flex-col justify-center gap-1">
+                <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wider text-amber-300">
+                  <Swords className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  Solo Free For All
+                </div>
+                <p className="text-[10px] font-mono text-slate-400 leading-snug">
+                  No teams — every bot is hostile. Top 3 kills win!
+                </p>
               </div>
-              <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    sounds.playUiClick();
-                    setPlayerTeam('blue');
-                  }}
-                  className={`py-2 text-[11px] font-mono font-black uppercase border clip-chamfer cursor-pointer transition ${
-                    playerTeam === 'blue'
-                      ? 'bg-cyan-500/25 border-cyan-400 text-cyan-200'
-                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-cyan-200'
-                  }`}
-                >
-                  Blue
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    sounds.playUiClick();
-                    setPlayerTeam('red');
-                  }}
-                  className={`py-2 text-[11px] font-mono font-black uppercase border clip-chamfer cursor-pointer transition ${
-                    playerTeam === 'red'
-                      ? 'bg-rose-500/25 border-rose-400 text-rose-200'
-                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-rose-200'
-                  }`}
-                >
-                  Red
-                </button>
+            ) : (
+              <div className="p-2.5 bg-slate-900/65 border border-slate-800 clip-chamfer space-y-2">
+                <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wider text-slate-300">
+                  <Flag className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                  Deploy Side
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sounds.playUiClick();
+                      setPlayerTeam('blue');
+                    }}
+                    className={`py-2 text-[11px] font-mono font-black uppercase border clip-chamfer cursor-pointer transition ${
+                      playerTeam === 'blue'
+                        ? 'bg-cyan-500/25 border-cyan-400 text-cyan-200'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-cyan-200'
+                    }`}
+                  >
+                    Blue
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sounds.playUiClick();
+                      setPlayerTeam('red');
+                    }}
+                    className={`py-2 text-[11px] font-mono font-black uppercase border clip-chamfer cursor-pointer transition ${
+                      playerTeam === 'red'
+                        ? 'bg-rose-500/25 border-rose-400 text-rose-200'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-rose-200'
+                    }`}
+                  >
+                    Red
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Squad Size */}
+            {/* Squad Size / Combatants */}
             <div className="p-2.5 bg-slate-900/65 border border-slate-800 clip-chamfer space-y-2">
               <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wider text-slate-300">
                 <Users className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                Squad Size
+                {mode === 'ffa' ? 'Combatants' : 'Squad Size'}
               </div>
               <div className="grid grid-cols-3 gap-1">
                 {(['1v1', '2v2', '3v3'] as SoloSquadSize[]).map((sz) => (
@@ -224,13 +338,13 @@ export function SoloSkirmishModal({
                       sounds.playUiClick();
                       setSquadSize(sz);
                     }}
-                    className={`py-2 text-[11px] font-mono font-black uppercase border clip-chamfer cursor-pointer transition ${
+                    className={`py-2 text-[10px] sm:text-[11px] font-mono font-black uppercase border clip-chamfer cursor-pointer transition ${
                       squadSize === sz
                         ? 'bg-emerald-500/25 border-emerald-400 text-emerald-200'
                         : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
                     }`}
                   >
-                    {sz}
+                    {mode === 'ffa' ? ffaSizeLabel[sz] : sz}
                   </button>
                 ))}
               </div>
@@ -272,38 +386,40 @@ export function SoloSkirmishModal({
 
           {/* Capture Limit + Clock */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wider text-cyan-300">
-                  <Trophy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                  Capture Goal
-                </span>
-                <span className="text-[10px] font-mono text-slate-400">
-                  First to {targetCaptures}
-                </span>
+            {mode === 'ctf' && (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wider text-cyan-300">
+                    <Trophy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    Capture Goal
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">
+                    First to {targetCaptures}
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {([1, 3, 5, 7] as TargetCapturesPreset[]).map((cap) => (
+                    <button
+                      key={cap}
+                      type="button"
+                      onClick={() => {
+                        sounds.playUiClick();
+                        setTargetCaptures(cap);
+                      }}
+                      className={`py-1.5 text-[11px] font-mono font-black uppercase border clip-chamfer cursor-pointer transition ${
+                        targetCaptures === cap
+                          ? 'bg-cyan-500/25 border-cyan-400 text-cyan-200'
+                          : 'bg-slate-900/80 border-slate-700/80 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      FT{cap}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="grid grid-cols-4 gap-1.5">
-                {([1, 3, 5, 7] as TargetCapturesPreset[]).map((cap) => (
-                  <button
-                    key={cap}
-                    type="button"
-                    onClick={() => {
-                      sounds.playUiClick();
-                      setTargetCaptures(cap);
-                    }}
-                    className={`py-1.5 text-[11px] font-mono font-black uppercase border clip-chamfer cursor-pointer transition ${
-                      targetCaptures === cap
-                        ? 'bg-cyan-500/25 border-cyan-400 text-cyan-200'
-                        : 'bg-slate-900/80 border-slate-700/80 text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    FT{cap}
-                  </button>
-                ))}
-              </div>
-            </div>
+            )}
 
-            <div>
+            <div className={mode !== 'ctf' ? 'sm:col-span-2' : ''}>
               <div className="flex items-center justify-between mb-1.5">
                 <span className="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wider text-cyan-300">
                   <Clock className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
@@ -312,11 +428,13 @@ export function SoloSkirmishModal({
                 <span className="text-[10px] font-mono text-slate-400">
                   {timeLimitSec === 0
                     ? 'Unlimited'
-                    : `${formatClockPreset(timeLimitSec)} + OT`}
+                    : mode === 'ffa'
+                      ? `${formatClockPreset(timeLimitSec)} Timed`
+                      : `${formatClockPreset(timeLimitSec)} + OT`}
                 </span>
               </div>
-              <div className="grid grid-cols-4 gap-1.5">
-                {([0, 180, 300, 480] as MatchTimeLimitPreset[]).map((sec) => (
+              <div className={`grid gap-1.5 ${timePresets.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+                {timePresets.map((sec) => (
                   <button
                     key={sec}
                     type="button"
@@ -343,7 +461,8 @@ export function SoloSkirmishModal({
           <div className="hidden xs:flex items-center gap-1.5 text-[10px] font-mono text-slate-400">
             <Shield className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
             <span>
-              Offline Bot CTF • {squadSize.toUpperCase()} •{' '}
+              Offline Bot {GAME_MODE_META[mode].shortLabel} •{' '}
+              {mode === 'ffa' ? ffaSizeLabel[squadSize] : squadSize.toUpperCase()} •{' '}
               {difficulty.toUpperCase()} AI
             </span>
           </div>

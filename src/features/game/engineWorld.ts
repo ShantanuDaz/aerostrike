@@ -7,7 +7,7 @@ import type {
   Particle,
   WeaponType,
 } from '../combat/types';
-import type { Team } from '../ctf/types';
+import type { GameMode, Team } from '../ctf/types';
 import type { ActiveRefillStation, GameMap } from '../map/types';
 import { isNewerSeq8, normalizeAngleRad } from '../network/fastProtocol';
 import { resolveCapsuleVsTerrainShapes } from '../map/terrainGeometry';
@@ -24,6 +24,7 @@ export interface SoloSkirmishConfig {
   squadSize: SoloSquadSize;
   difficulty: BotDifficulty;
   playerTeam: Team;
+  mode?: GameMode;
 }
 
 export function buildActiveStations(map: GameMap): ActiveRefillStation[] {
@@ -145,6 +146,7 @@ class GameEngineWorld {
     squadSize: '2v2',
     difficulty: 'veteran',
     playerTeam: 'blue',
+    mode: 'ctf',
   };
   public minimapTarget: MinimapTargetState = {
     canvas: null,
@@ -589,7 +591,8 @@ class GameEngineWorld {
   ) {
     const squadSize = configOverride?.squadSize ?? this.soloConfig.squadSize;
     const difficulty = configOverride?.difficulty ?? this.soloConfig.difficulty;
-    this.soloBots = createSoloBotSquad(map, localTeam, { squadSize, difficulty });
+    const mode = configOverride?.mode ?? this.soloConfig.mode ?? 'ctf';
+    this.soloBots = createSoloBotSquad(map, localTeam, { squadSize, difficulty, mode });
   }
 
   public clearSoloBots() {

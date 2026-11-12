@@ -234,6 +234,10 @@ function closestSegmentPair(
   return { distSq: rx * rx + ry * ry, s: sc };
 }
 
+export interface UpdateBulletsOptions {
+  allowFriendlyFire?: boolean;
+}
+
 /**
  * Emits explosion SFX, particles, and radial splash hits for rockets & frag grenades.
  */
@@ -245,6 +249,7 @@ function detonateExplosive(
   newParticles: Particle[],
   explosions: ExplosionEvent[],
   hits: BulletCollisionResult['hits'],
+  allowFriendlyFire: boolean = false,
 ): void {
   sounds.playExplosion();
   const isFrag = bullet.weaponType === 'grenade';
@@ -266,7 +271,13 @@ function detonateExplosive(
 
   for (const p of players) {
     if (p.isDead || p.isInvulnerable) continue;
-    if (bullet.team && p.team && bullet.team === p.team && p.id !== bullet.shooterId) {
+    if (
+      !allowFriendlyFire &&
+      bullet.team &&
+      p.team &&
+      bullet.team === p.team &&
+      p.id !== bullet.shooterId
+    ) {
       continue;
     }
 
@@ -300,9 +311,11 @@ export function updateBullets(
   map: GameMap,
   players: TargetPlayer[],
   dt: number = 1 / 60,
+  options?: UpdateBulletsOptions,
 ): BulletCollisionResult {
   const safeDt = Math.max(0.001, Math.min(0.05, dt));
   const dtScale = safeDt * 60;
+  const allowFriendlyFire = Boolean(options?.allowFriendlyFire);
 
   const activeBullets: Bullet[] = [];
   const newParticles: Particle[] = [];
@@ -336,7 +349,7 @@ export function updateBullets(
     for (const p of players) {
       if (p.isDead || p.isInvulnerable) continue;
       if (p.id === bullet.shooterId) continue;
-      if (bullet.team && p.team && bullet.team === p.team) continue;
+      if (!allowFriendlyFire && bullet.team && p.team && bullet.team === p.team) continue;
 
       // Head sphere: centered at (p.x, p.y - 16), radius 11.5 (helmet/visor crit zone)
       const headHitT = segmentCircleHitT(
@@ -390,7 +403,16 @@ export function updateBullets(
       if (hitPlayer) {
         const impactX = startX + (endX - startX) * earliestPlayerT;
         const impactY = startY + (endY - startY) * earliestPlayerT;
-        detonateExplosive(bullet, impactX, impactY, players, newParticles, explosions, hits);
+        detonateExplosive(
+          bullet,
+          impactX,
+          impactY,
+          players,
+          newParticles,
+          explosions,
+          hits,
+          allowFriendlyFire,
+        );
         continue;
       }
 
@@ -424,7 +446,16 @@ export function updateBullets(
         bullet.lifespan -= dtScale;
 
         if (bullet.lifespan <= 0) {
-          detonateExplosive(bullet, bullet.x, bullet.y, players, newParticles, explosions, hits);
+          detonateExplosive(
+            bullet,
+            bullet.x,
+            bullet.y,
+            players,
+            newParticles,
+            explosions,
+            hits,
+            allowFriendlyFire,
+          );
         } else {
           activeBullets.push(bullet);
         }
@@ -442,7 +473,16 @@ export function updateBullets(
       }
 
       if (bullet.lifespan <= 0) {
-        detonateExplosive(bullet, bullet.x, bullet.y, players, newParticles, explosions, hits);
+        detonateExplosive(
+          bullet,
+          bullet.x,
+          bullet.y,
+          players,
+          newParticles,
+          explosions,
+          hits,
+          allowFriendlyFire,
+        );
       } else {
         activeBullets.push(bullet);
       }
@@ -460,7 +500,16 @@ export function updateBullets(
       const impactY = startY + (endY - startY) * hitT;
 
       if (bullet.blastRadius > 0) {
-        detonateExplosive(bullet, impactX, impactY, players, newParticles, explosions, hits);
+        detonateExplosive(
+          bullet,
+          impactX,
+          impactY,
+          players,
+          newParticles,
+          explosions,
+          hits,
+          allowFriendlyFire,
+        );
       } else {
         // Direct kinetic hit (directional ricochet sparks on sloped/curved terrain)
         if (blockedByObstacle && terrainHit) {

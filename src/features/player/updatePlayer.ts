@@ -1,7 +1,8 @@
 import type { Player, InputState } from './types';
 import type { GameMap } from '../map/types';
+import type { GameMode } from '../ctf/types';
 import { sounds } from '../audio/soundEngine';
-import { pickTeamSpawn } from './playerStore';
+import { pickSpawnForMode } from './playerStore';
 import {
   probeWalkableSurfaceBelow,
   resolveCapsuleVsTerrainShapes,
@@ -64,6 +65,7 @@ export function updatePlayer(
   dt: number = 1 / 60,
   isLocalPlayer: boolean = true,
   respawnDelaySec: number = 4.5,
+  mode: GameMode = 'ctf',
 ): Player {
   const safeDt = Math.max(0.001, Math.min(0.05, dt));
   const dtScale = safeDt * 60;
@@ -75,7 +77,7 @@ export function updatePlayer(
     }
     const nextRespawnTimer = player.respawnTimer - safeDt;
     if (nextRespawnTimer <= 0) {
-      const spawn = pickTeamSpawn(map, player.team, player.id);
+      const spawn = pickSpawnForMode(map, player.team, mode, player.id);
       return {
         ...player,
         x: spawn.x,

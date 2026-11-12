@@ -7,7 +7,12 @@ import { useAvatarStore, DEFAULT_AVATAR } from "../avatar/avatarStore";
 import { useSettingsStore } from "../settings/settingsStore";
 import { sounds } from "../audio/soundEngine";
 import { useCTFStore } from "../ctf/ctfStore";
-import type { MatchRulesConfig, Team } from "../ctf/types";
+import {
+  GAME_MODE_META,
+  sanitizeMatchRules,
+  type MatchRulesConfig,
+  type Team,
+} from "../ctf/types";
 import { RoomQRCodeModal } from "../ui/RoomQRCodeModal";
 import { isNativeShareSupported, shareRoomInvite } from "../pwa";
 import { VoiceMicButton, WarRoomCommsPanel } from "../comms/CommsPanel";
@@ -185,7 +190,7 @@ export function WarRoomScreen({
   const handleUpdateRules = (partial: Partial<MatchRulesConfig>) => {
     if (!isHost) return;
     sounds.playUiClick();
-    const next: MatchRulesConfig = { ...matchRules, ...partial };
+    const next = sanitizeMatchRules(partial, matchRules);
     setMatchRules(next);
     networkManager.broadcastRulesChange(next);
   };
@@ -202,7 +207,9 @@ export function WarRoomScreen({
     }
     setConfirmUnreadyLaunch(false);
     sounds.playUiClick();
-    usePlayerStore.getState().spawnAtTeamBase(selectedMap, localPlayerId);
+    usePlayerStore
+      .getState()
+      .spawnAtTeamBase(selectedMap, localPlayerId, matchRules.mode);
     networkManager.broadcastStartMatch(selectedMap.id);
     onStartMatch();
   };
@@ -369,43 +376,54 @@ export function WarRoomScreen({
 
             {/* Faction Switcher + Rules & Roster Triggers */}
             <div className="w-full flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
-              <div className="flex items-center gap-1 sm:gap-2 bg-slate-950/75 backdrop-blur-md border border-slate-800/90 p-0.5 sm:p-1 clip-chamfer">
-                <button
-                  type="button"
-                  onClick={() => handleSelectTeam("blue")}
-                  className={`flex items-center gap-1 sm:gap-1.5 px-2 xs:px-2.5 sm:px-3.5 py-1 text-[10px] sm:text-xs font-mono font-black uppercase tracking-wider transition clip-chamfer ${
-                    localTeam === "blue"
-                      ? "bg-cyan-500/25 border border-cyan-400 text-cyan-200 glow-cyan cursor-default"
-                      : "bg-slate-900/70 hover:bg-blue-950/60 border border-transparent text-slate-400 hover:text-cyan-200 cursor-pointer"
-                  }`}
-                >
-                  <Flag className="w-3 h-3 text-cyan-400 shrink-0" />
-                  <span>Blue</span>
-                  <span className="px-1 xs:px-1.5 py-0.5 bg-blue-950 text-cyan-300 text-[9px]">
-                    {blueMembers.length}
+              {matchRules.mode === "ffa" ? (
+                <div className="flex items-center gap-2 bg-slate-950/75 backdrop-blur-md border border-amber-500/45 px-2.5 sm:px-3.5 py-1.5 clip-chamfer">
+                  <span className="text-[10px] sm:text-xs font-mono font-black uppercase tracking-wider text-amber-300">
+                    Free For All • No Teams
                   </span>
-                </button>
-
-                <span className="text-[9px] font-mono font-bold text-slate-600 px-0.5">
-                  VS
-                </span>
-
-                <button
-                  type="button"
-                  onClick={() => handleSelectTeam("red")}
-                  className={`flex items-center gap-1 sm:gap-1.5 px-2 xs:px-2.5 sm:px-3.5 py-1 text-[10px] sm:text-xs font-mono font-black uppercase tracking-wider transition clip-chamfer ${
-                    localTeam === "red"
-                      ? "bg-rose-500/25 border border-rose-400 text-rose-200 glow-red cursor-default"
-                      : "bg-slate-900/70 hover:bg-rose-950/60 border border-transparent text-slate-400 hover:text-rose-200 cursor-pointer"
-                  }`}
-                >
-                  <Flag className="w-3 h-3 text-rose-400 shrink-0" />
-                  <span>Red</span>
-                  <span className="px-1 xs:px-1.5 py-0.5 bg-rose-950 text-rose-300 text-[9px]">
-                    {redMembers.length}
+                  <span className="hidden sm:inline text-[10px] font-mono text-slate-400">
+                    Top 3 Kills Win
                   </span>
-                </button>
-              </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 sm:gap-2 bg-slate-950/75 backdrop-blur-md border border-slate-800/90 p-0.5 sm:p-1 clip-chamfer">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTeam("blue")}
+                    className={`flex items-center gap-1 sm:gap-1.5 px-2 xs:px-2.5 sm:px-3.5 py-1 text-[10px] sm:text-xs font-mono font-black uppercase tracking-wider transition clip-chamfer ${
+                      localTeam === "blue"
+                        ? "bg-cyan-500/25 border border-cyan-400 text-cyan-200 glow-cyan cursor-default"
+                        : "bg-slate-900/70 hover:bg-blue-950/60 border border-transparent text-slate-400 hover:text-cyan-200 cursor-pointer"
+                    }`}
+                  >
+                    <Flag className="w-3 h-3 text-cyan-400 shrink-0" />
+                    <span>Blue</span>
+                    <span className="px-1 xs:px-1.5 py-0.5 bg-blue-950 text-cyan-300 text-[9px]">
+                      {blueMembers.length}
+                    </span>
+                  </button>
+
+                  <span className="text-[9px] font-mono font-bold text-slate-600 px-0.5">
+                    VS
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTeam("red")}
+                    className={`flex items-center gap-1 sm:gap-1.5 px-2 xs:px-2.5 sm:px-3.5 py-1 text-[10px] sm:text-xs font-mono font-black uppercase tracking-wider transition clip-chamfer ${
+                      localTeam === "red"
+                        ? "bg-rose-500/25 border border-rose-400 text-rose-200 glow-red cursor-default"
+                        : "bg-slate-900/70 hover:bg-rose-950/60 border border-transparent text-slate-400 hover:text-rose-200 cursor-pointer"
+                    }`}
+                  >
+                    <Flag className="w-3 h-3 text-rose-400 shrink-0" />
+                    <span>Red</span>
+                    <span className="px-1 xs:px-1.5 py-0.5 bg-rose-950 text-rose-300 text-[9px]">
+                      {redMembers.length}
+                    </span>
+                  </button>
+                </div>
+              )}
 
               <div className="flex items-center gap-1 sm:gap-2">
                 <button
@@ -416,11 +434,16 @@ export function WarRoomScreen({
                   }}
                   className="flex items-center gap-1 sm:gap-1.5 px-2 xs:px-2.5 sm:px-3 py-1.5 bg-slate-950/80 hover:bg-slate-900 border border-slate-700/80 hover:border-amber-400/60 text-slate-200 hover:text-white text-[10px] sm:text-xs font-mono font-bold uppercase tracking-wider clip-chamfer transition cursor-pointer"
                   title={
-                    isHost ? "Configure Match Rules" : "View Active Match Rules"
+                    isHost ? "Configure Match Mode & Rules" : "View Active Match Mode & Rules"
                   }
                 >
                   <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                  <span>FT{matchRules.targetCaptures}</span>
+                  <span className="text-amber-300">
+                    {GAME_MODE_META[matchRules.mode].shortLabel}
+                  </span>
+                  {matchRules.mode === "ctf" && (
+                    <span>• FT{matchRules.targetCaptures}</span>
+                  )}
                   <span className="hidden md:inline text-slate-400">
                     • {formatClockPreset(matchRules.timeLimitSec)} •{" "}
                     {matchRules.respawnDelaySec}s
@@ -654,6 +677,7 @@ export function WarRoomScreen({
 
       <SquadRosterModal
         isOpen={showRosterModal}
+        mode={matchRules.mode}
         totalPlayers={totalPlayers}
         readyCount={readyCount}
         blueMembers={blueMembers}

@@ -62,8 +62,15 @@ export function sendKillFeedEvent(
   sendToNetwork: SendToNetworkFn,
   event: KillFeedEvent,
 ) {
-  useMatchStatsStore.getState().recordKill(event);
-  if (!session.peer || session.peer.destroyed) return;
+  if (!session.peer || session.peer.destroyed) {
+    useCTFStore.getState().recordAuthoritativeKill(event);
+    return;
+  }
+  if (session.isHostRole) {
+    useCTFStore.getState().recordAuthoritativeKill(event);
+  } else {
+    useMatchStatsStore.getState().recordKillFeedOnly(event);
+  }
   const myPlayerId = useAvatarStore.getState().playerId;
   sendToNetwork({
     kind: 'kill_feed',

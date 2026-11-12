@@ -274,4 +274,39 @@ describe('updateBullets swept collision, muzzle safety, and splash', () => {
     expect(directRes.explosions).toHaveLength(1);
     expect(directRes.explosions[0].radius).toBe(132);
   });
+
+  it('permits direct and explosive splash hits against same-team targets when allowFriendlyFire is enabled (FFA)', () => {
+    const map = makeMap([{ x: 300, y: 350, width: 20, height: 100, type: 'wall' }]);
+    const bullet = makeBullet({ x: 195, y: 400, vx: 40, team: 'blue', shooterId: 'shooter_blue' });
+    const targets: TargetPlayer[] = [
+      makeTarget({ id: 'shooter_blue', team: 'blue', x: 190, y: 400 }),
+      makeTarget({ id: 'rival_same_preset', team: 'blue', x: 215, y: 400 }),
+    ];
+
+    const directFfa = updateBullets([bullet], map, targets, 1 / 60, { allowFriendlyFire: true });
+    expect(directFfa.hits).toHaveLength(1);
+    expect(directFfa.hits[0].targetId).toBe('rival_same_preset');
+
+    const rocket = makeBullet({
+      id: 'rpg_ffa',
+      weaponType: 'rocket',
+      shooterId: 'shooter_blue',
+      team: 'blue',
+      x: 285,
+      y: 400,
+      vx: 20,
+      damage: 90,
+      blastRadius: 115,
+    });
+    const splashTargets: TargetPlayer[] = [
+      makeTarget({ id: 'rival_blue', team: 'blue', x: 285, y: 400 }),
+      makeTarget({ id: 'shooter_blue', team: 'blue', x: 270, y: 400 }),
+    ];
+    const splashFfa = updateBullets([rocket], map, splashTargets, 1 / 60, {
+      allowFriendlyFire: true,
+    });
+    const hitIds = splashFfa.hits.map((h) => h.targetId);
+    expect(hitIds).toContain('rival_blue');
+    expect(hitIds).toContain('shooter_blue');
+  });
 });

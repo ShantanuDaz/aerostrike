@@ -163,7 +163,8 @@ export function GameCanvas({ map }: GameCanvasProps) {
     }
 
     const myPlayerId = useAvatarStore.getState().playerId;
-    usePlayerStore.getState().spawnAtTeamBase(map, myPlayerId);
+    const latestCtfMode = useCTFStore.getState().matchRules.mode;
+    usePlayerStore.getState().spawnAtTeamBase(map, myPlayerId, latestCtfMode);
     const spawnedLocal = usePlayerStore.getState().player;
 
     const stats = useMatchStatsStore.getState();
@@ -211,13 +212,19 @@ export function GameCanvas({ map }: GameCanvasProps) {
   }, [avatar]);
 
   // Weapon Fire Handler
-  const handleFire = useCallback(() => {
+  const handleFire = useCallback((aimAngleOverride?: number) => {
     if (useCTFStore.getState().matchStatus !== 'playing') return;
     const isMultiplayer = Boolean(useNetworkStore.getState().roomCode);
     if (!isMultiplayer && useMatchStatsStore.getState().tacticalMenuOpen) return;
 
     const player = engineWorld.localPlayer ?? usePlayerStore.getState().player;
     if (player.isDead) return;
+
+    const effectiveAimAngle =
+      typeof aimAngleOverride === 'number' ? aimAngleOverride : player.aimAngle;
+    if (typeof aimAngleOverride === 'number') {
+      player.aimAngle = aimAngleOverride;
+    }
 
     const muzzleOriginX = player.x;
     const muzzleOriginY = player.y - 5;
@@ -227,7 +234,7 @@ export function GameCanvas({ map }: GameCanvasProps) {
       team: player.team,
       originX: muzzleOriginX,
       originY: muzzleOriginY,
-      aimAngle: player.aimAngle,
+      aimAngle: effectiveAimAngle,
       map,
     });
 
@@ -242,8 +249,8 @@ export function GameCanvas({ map }: GameCanvasProps) {
       }
 
       const recoilImpulse = fireResult.recoil;
-      player.vx -= Math.cos(player.aimAngle) * recoilImpulse;
-      player.vy -= Math.sin(player.aimAngle) * recoilImpulse;
+      player.vx -= Math.cos(effectiveAimAngle) * recoilImpulse;
+      player.vy -= Math.sin(effectiveAimAngle) * recoilImpulse;
 
       networkManager.broadcastShoot({
         shooterId: player.id,
@@ -251,7 +258,7 @@ export function GameCanvas({ map }: GameCanvasProps) {
         weaponType: fireResult.firedWeapon,
         originX: muzzleOriginX,
         originY: muzzleOriginY,
-        aimAngle: player.aimAngle,
+        aimAngle: effectiveAimAngle,
         spreadOffsets: fireResult.spreadOffsets,
         speedScale: fireResult.speedScale,
       });
@@ -565,6 +572,7 @@ export function GameCanvas({ map }: GameCanvasProps) {
       />
       <MinimapView map={map} />
       <VirtualControls
+        onFire={handleFire}
         onSwitchWeapon={handleSwitchWeapon}
         onThrowGrenade={handleThrowGrenade}
       />

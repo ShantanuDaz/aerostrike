@@ -5,23 +5,29 @@ import { networkManager } from '../network/peerRoom';
 import { usePlayerStore } from '../player/playerStore';
 import { useCombatStore } from '../combat/combatStore';
 import { clearOptimisticClaims } from '../combat/optimisticClaims';
-import { useMatchStatsStore, type PlayerMatchStats } from '../combat/statsStore';
+import {
+  sortFFAStandings,
+  useMatchStatsStore,
+  type PlayerMatchStats,
+} from '../combat/statsStore';
 import { useSettingsStore } from '../settings/settingsStore';
 import { useAvatarStore } from '../avatar/avatarStore';
 import { buildActiveStations, engineWorld } from '../game/engineWorld';
-import { Award, Clock, LogOut, RefreshCw, Trophy, Zap } from 'lucide-react';
+import { Award, Clock, Crown, LogOut, Medal, RefreshCw, Trophy, Zap } from 'lucide-react';
 
 interface GameOverModalProps {
   onLeaveMatch?: () => void;
 }
 
-function getScoreValue(row: PlayerMatchStats): number {
-  return row.captures * 100 + row.kills * 10 - row.deaths;
+function getScoreValue(row: PlayerMatchStats, isTDM: boolean): number {
+  return isTDM ? row.kills * 100 - row.deaths : row.captures * 100 + row.kills * 10 - row.deaths;
 }
 
 export function GameOverModal({ onLeaveMatch }: GameOverModalProps) {
   const matchStatus = useCTFStore((s) => s.matchStatus);
   const winner = useCTFStore((s) => s.winner);
+  const winnerId = useCTFStore((s) => s.winnerId);
+  const winnerCallsign = useCTFStore((s) => s.winnerCallsign);
   const score = useCTFStore((s) => s.score);
   const targetCaptures = useCTFStore((s) => s.targetCaptures);
   const isOvertime = useCTFStore((s) => s.isOvertime);
@@ -36,23 +42,44 @@ export function GameOverModal({ onLeaveMatch }: GameOverModalProps) {
 
   if (matchStatus !== 'game_over') return null;
 
+  const gameMode = matchRules.mode;
+  const isCTF = gameMode === 'ctf';
+  const isTDM = gameMode === 'tdm';
+  const isFFA = gameMode === 'ffa';
   const isBlueWinner = winner === 'blue';
   const canStartRematch = !roomCode || isHost;
-  const winConditionLabel = isOvertime
-    ? 'Sudden-Death Overtime Decider'
-    : score.blue < targetCaptures &&
-        score.red < targetCaptures &&
-        matchRules.timeLimitSec > 0 &&
-        timeRemainingSec === 0
-      ? 'Regulation Time Expired • Score Advantage'
-      : `Target Limit Reached • First to ${targetCaptures}`;
 
-  const sortedAll = Object.values(statsByPlayerId).sort(
-    (a, b) => getScoreValue(b) - getScoreValue(a),
-  );
+  const winConditionLabel = isFFA
+    ? 'Ranked by Total Kills in Match Time'
+    : isTDM
+      ? isOvertime
+        ? 'Sudden-Death Overtime • First Kill Decider'
+        : 'Time Expired • Highest Team Kills'
+      : isOvertime
+        ? 'Sudden-Death Overtime Decider'
+        : score.blue < targetCaptures &&
+            score.red < targetCaptures &&
+            matchRules.timeLimitSec > 0 &&
+            timeRemainingSec === 0
+          ? 'Regulation Time Expired • Score Advantage'
+          : `Target Limit Reached • First to ${targetCaptures}`;
+
+  const sortedAll = isFFA
+    ? sortFFAStandings(Object.values(statsByPlayerId))
+    : Object.values(statsByPlayerId).sort(
+        (a, b) => getScoreValue(b, isTDM) - getScoreValue(a, isTDM),
+      );
   const mvp = sortedAll[0] ?? null;
   const blueStats = sortedAll.filter((s) => s.team === 'blue');
   const redStats = sortedAll.filter((s) => s.team === 'red');
+  const ffaPodium = sortedAll.slice(0, 3);
+  const ffaRest = sortedAll.slice(3);
+  const ffaChampionName =
+    winnerCallsign ||
+    (winnerId ? statsByPlayerId[winnerId]?.callsign : undefined) ||
+    ffaPodium[0]?.callsign ||
+    'Pilot';
+  const localFfaRank = sortedAll.findIndex((s) => s.playerId === localPlayerId);
 
   const handlePlayAgain = () => {
     if (!canStartRematch) return;
@@ -72,12 +99,15 @@ export function GameOverModal({ onLeaveMatch }: GameOverModalProps) {
     stats.resetStats();
     useCombatStore.getState().initLoadout(useSettingsStore.getState().defaultWeapon);
     const myPlayerId = useAvatarStore.getState().playerId;
-    usePlayerStore.getState().spawnAtTeamBase(selectedMap, myPlayerId);
+    usePlayerStore.getState().spawnAtTeamBase(selectedMap, myPlayerId, gameMode);
     const spawnedLocal = usePlayerStore.getState().player;
     stats.registerParticipant(myPlayerId, spawnedLocal.avatar.callsign, spawnedLocal.team);
 
     if (!roomCode) {
-      engineWorld.spawnSoloBots(selectedMap, spawnedLocal.team, engineWorld.soloConfig);
+      engineWorld.spawnSoloBots(selectedMap, spawnedLocal.team, {
+        ...engineWorld.soloConfig,
+        mode: gameMode,
+      });
       for (const bot of engineWorld.soloBots) {
         stats.registerParticipant(bot.id, bot.player.avatar.callsign, bot.team);
       }
@@ -92,22 +122,53 @@ export function GameOverModal({ onLeaveMatch }: GameOverModalProps) {
     initMatch(selectedMap);
   };
 
+  const podiumMeta = [
+    {
+      place: '1st Place',
+      border: 'border-amber-400/75 bg-amber-950/40',
+      badge: 'bg-amber-400 text-slate-950',
+      text: 'text-amber-300',
+    },
+    {
+      place: '2nd Place',
+      border: 'border-slate-300/60 bg-slate-900/75',
+      badge: 'bg-slate-300 text-slate-950',
+      text: 'text-slate-200',
+    },
+    {
+      place: '3rd Place',
+      border: 'border-orange-400/60 bg-orange-950/35',
+      badge: 'bg-orange-400 text-slate-950',
+      text: 'text-orange-300',
+    },
+  ] as const;
+
   return (
     <div className="fixed inset-0 z-50 safe-insets flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-2.5 sm:p-4 animate-in fade-in zoom-in-95 duration-200 select-none">
       <div
         className={`clip-chamfer-lg max-w-lg short-wide:max-w-2xl w-full max-h-[94dvh] overflow-hidden flex flex-col shadow-2xl relative border ${
-          isBlueWinner ? 'cyber-panel-blue' : 'cyber-panel-red'
+          isFFA
+            ? 'cyber-panel border-amber-400/50 glow-amber'
+            : isBlueWinner
+              ? 'cyber-panel-blue'
+              : 'cyber-panel-red'
         }`}
       >
         <div className="overflow-y-auto cyber-scroll p-4 sm:tall:p-6 short:p-3.5 text-center flex flex-col items-center gap-3 sm:tall:gap-4 short:gap-2">
           <div
             className={`w-12 h-12 sm:tall:w-16 sm:tall:h-16 short:w-10 short:h-10 clip-chamfer flex items-center justify-center shadow-2xl shrink-0 ${
-              isBlueWinner
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400 glow-cyan'
-                : 'bg-rose-500/20 text-rose-300 border border-rose-400 glow-red'
+              isFFA
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-400 glow-amber'
+                : isBlueWinner
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400 glow-cyan'
+                  : 'bg-rose-500/20 text-rose-300 border border-rose-400 glow-red'
             }`}
           >
-            <Trophy className="w-6 h-6 sm:tall:w-8 sm:tall:h-8 short:w-5 short:h-5" />
+            {isFFA ? (
+              <Crown className="w-6 h-6 sm:tall:w-8 sm:tall:h-8 short:w-5 short:h-5" />
+            ) : (
+              <Trophy className="w-6 h-6 sm:tall:w-8 sm:tall:h-8 short:w-5 short:h-5" />
+            )}
           </div>
 
           <div className="w-full">
@@ -116,10 +177,14 @@ export function GameOverModal({ onLeaveMatch }: GameOverModalProps) {
             </span>
             <h2
               className={`text-2xl sm:tall:text-3xl short:text-xl font-black italic uppercase tracking-tight mt-0.5 ${
-                isBlueWinner ? 'text-cyber-shimmer' : 'text-red-shimmer'
+                isFFA
+                  ? 'text-amber-300 drop-shadow-[0_0_16px_rgba(251,191,36,0.45)]'
+                  : isBlueWinner
+                    ? 'text-cyber-shimmer'
+                    : 'text-red-shimmer'
               }`}
             >
-              {winner} Squad Victory
+              {isFFA ? `${ffaChampionName} Wins!` : `${winner} Squad Victory`}
             </h2>
             <span
               className={`inline-block mt-1 px-2.5 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider clip-chamfer border ${
@@ -129,116 +194,193 @@ export function GameOverModal({ onLeaveMatch }: GameOverModalProps) {
               }`}
             >
               {winConditionLabel}
+              {isFFA && localFfaRank >= 0 ? ` • You Placed #${localFfaRank + 1}` : ''}
             </span>
           </div>
 
-          {/* Score & MVP Split */}
-          <div className="grid grid-cols-1 short-wide:grid-cols-2 sm:grid-cols-2 gap-2.5 w-full">
-            <div className="flex items-center justify-center gap-6 bg-slate-950/80 border border-cyan-500/30 px-5 py-2.5 clip-chamfer">
-              <div className="text-center">
-                <span className="text-[10px] font-mono font-black text-cyan-400 block tracking-widest uppercase">
-                  Blue
-                </span>
-                <span className="text-2xl sm:text-3xl font-black text-white font-mono leading-tight">
-                  {score.blue}
-                </span>
+          {isFFA ? (
+            <>
+              {/* 1st / 2nd / 3rd Place Podium */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full">
+                {ffaPodium.map((entry, idx) => {
+                  const style = podiumMeta[idx];
+                  const isMe = entry.playerId === localPlayerId;
+                  return (
+                    <div
+                      key={entry.playerId}
+                      className={`border px-3 py-2.5 clip-chamfer flex sm:flex-col items-center justify-between sm:justify-center gap-1.5 ${style.border}`}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <Medal className={`w-3.5 h-3.5 shrink-0 ${style.text}`} />
+                        <span
+                          className={`px-1.5 py-0.5 text-[9px] font-mono font-black uppercase ${style.badge}`}
+                        >
+                          #{idx + 1} {style.place}
+                        </span>
+                      </div>
+                      <div className="text-sm font-black font-mono text-white truncate max-w-full">
+                        {entry.callsign}
+                        {isMe ? ' (YOU)' : ''}
+                      </div>
+                      <div className={`text-xs font-mono font-black ${style.text}`}>
+                        {entry.kills} Kills <span className="text-slate-400 font-normal">• {entry.deaths}D</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <span className="text-slate-600 font-black text-lg font-mono">:</span>
-              <div className="text-center">
-                <span className="text-[10px] font-mono font-black text-rose-400 block tracking-widest uppercase">
-                  Red
-                </span>
-                <span className="text-2xl sm:text-3xl font-black text-white font-mono leading-tight">
-                  {score.red}
-                </span>
-              </div>
-            </div>
 
-            {mvp && (
-              <div className="bg-amber-950/35 border border-amber-400/45 px-4 py-2 clip-chamfer flex items-center gap-3 text-left">
-                <div className="w-9 h-9 clip-chamfer bg-amber-400/15 border border-amber-400/50 flex items-center justify-center shrink-0">
-                  <Award className="w-5 h-5 text-amber-300" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <span className="text-[9px] font-mono font-black uppercase tracking-widest text-amber-300 block">
-                    Match MVP
-                  </span>
-                  <div className="text-sm font-black font-mono text-white truncate">
-                    {mvp.callsign}
-                  </div>
-                  <div className="text-[10px] font-mono text-slate-300">
-                    {mvp.captures} CAP • {mvp.kills} K • {mvp.deaths} D
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Final Match Scoreboard */}
-          {sortedAll.length > 0 && (
-            <div className="grid grid-cols-1 short-wide:grid-cols-2 sm:grid-cols-2 gap-2 w-full text-left">
-              {(
-                [
-                  { label: 'Blue Squad', rows: blueStats, tone: 'cyan' },
-                  { label: 'Red Squad', rows: redStats, tone: 'rose' },
-                ] as const
-              ).map((group) => (
-                <div
-                  key={group.label}
-                  className={`bg-slate-950/75 border clip-chamfer p-2 ${
-                    group.tone === 'cyan' ? 'border-cyan-500/25' : 'border-rose-500/25'
-                  }`}
-                >
-                  <div
-                    className={`flex items-center justify-between text-[9px] font-mono font-black uppercase tracking-widest pb-1 mb-1 border-b ${
-                      group.tone === 'cyan'
-                        ? 'text-cyan-300 border-cyan-500/20'
-                        : 'text-rose-300 border-rose-500/20'
-                    }`}
-                  >
-                    <span>{group.label}</span>
-                    <div className="flex items-center gap-2.5 text-slate-400">
-                      <span className="w-5 text-right">C</span>
-                      <span className="w-5 text-right">K</span>
-                      <span className="w-5 text-right">D</span>
+              {ffaRest.length > 0 && (
+                <div className="w-full bg-slate-950/75 border border-slate-800 clip-chamfer p-2 text-left">
+                  <div className="flex items-center justify-between text-[9px] font-mono font-black uppercase tracking-widest text-slate-400 pb-1 mb-1 border-b border-slate-800">
+                    <span>Remaining Pilots</span>
+                    <div className="flex items-center gap-3">
+                      <span className="w-6 text-right">K</span>
+                      <span className="w-6 text-right">D</span>
                     </div>
                   </div>
                   <div className="flex flex-col gap-1">
-                    {group.rows.map((row) => {
+                    {ffaRest.map((row, rIdx) => {
+                      const rank = rIdx + 4;
                       const isMe = row.playerId === localPlayerId;
                       return (
                         <div
                           key={row.playerId}
-                          className={`flex items-center justify-between px-1.5 py-0.5 text-[10px] font-mono clip-chamfer ${
-                            isMe
-                              ? group.tone === 'cyan'
-                                ? 'bg-cyan-500/15 text-white font-bold'
-                                : 'bg-rose-500/15 text-white font-bold'
-                              : 'text-slate-300'
+                          className={`flex items-center justify-between px-2 py-0.5 text-[10px] font-mono clip-chamfer ${
+                            isMe ? 'bg-cyan-500/15 text-white font-bold' : 'text-slate-300'
                           }`}
                         >
-                          <span className="truncate pr-1.5">
-                            {row.callsign}
+                          <span className="truncate pr-2">
+                            #{rank} {row.callsign}
                             {isMe ? ' (YOU)' : ''}
                           </span>
-                          <div className="flex items-center gap-2.5 shrink-0 font-bold">
-                            <span className="w-5 text-right text-amber-300">{row.captures}</span>
-                            <span
-                              className={`w-5 text-right ${
-                                group.tone === 'cyan' ? 'text-cyan-300' : 'text-rose-300'
-                              }`}
-                            >
-                              {row.kills}
-                            </span>
-                            <span className="w-5 text-right text-slate-400">{row.deaths}</span>
+                          <div className="flex items-center gap-3 shrink-0 font-bold tabular-nums">
+                            <span className="w-6 text-right text-amber-300">{row.kills}</span>
+                            <span className="w-6 text-right text-slate-400">{row.deaths}</span>
                           </div>
                         </div>
                       );
                     })}
                   </div>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
+          ) : (
+            <>
+              {/* Score & MVP Split */}
+              <div className="grid grid-cols-1 short-wide:grid-cols-2 sm:grid-cols-2 gap-2.5 w-full">
+                <div className="flex items-center justify-center gap-6 bg-slate-950/80 border border-cyan-500/30 px-5 py-2.5 clip-chamfer">
+                  <div className="text-center">
+                    <span className="text-[10px] font-mono font-black text-cyan-400 block tracking-widest uppercase">
+                      {isTDM ? 'Blue Kills' : 'Blue'}
+                    </span>
+                    <span className="text-2xl sm:text-3xl font-black text-white font-mono leading-tight">
+                      {score.blue}
+                    </span>
+                  </div>
+                  <span className="text-slate-600 font-black text-lg font-mono">:</span>
+                  <div className="text-center">
+                    <span className="text-[10px] font-mono font-black text-rose-400 block tracking-widest uppercase">
+                      {isTDM ? 'Red Kills' : 'Red'}
+                    </span>
+                    <span className="text-2xl sm:text-3xl font-black text-white font-mono leading-tight">
+                      {score.red}
+                    </span>
+                  </div>
+                </div>
+
+                {mvp && (
+                  <div className="bg-amber-950/35 border border-amber-400/45 px-4 py-2 clip-chamfer flex items-center gap-3 text-left">
+                    <div className="w-9 h-9 clip-chamfer bg-amber-400/15 border border-amber-400/50 flex items-center justify-center shrink-0">
+                      <Award className="w-5 h-5 text-amber-300" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[9px] font-mono font-black uppercase tracking-widest text-amber-300 block">
+                        Match MVP
+                      </span>
+                      <div className="text-sm font-black font-mono text-white truncate">
+                        {mvp.callsign}
+                      </div>
+                      <div className="text-[10px] font-mono text-slate-300">
+                        {isCTF ? `${mvp.captures} CAP • ` : ''}
+                        {mvp.kills} K • {mvp.deaths} D
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Final Match Scoreboard */}
+              {sortedAll.length > 0 && (
+                <div className="grid grid-cols-1 short-wide:grid-cols-2 sm:grid-cols-2 gap-2 w-full text-left">
+                  {(
+                    [
+                      { label: 'Blue Squad', rows: blueStats, tone: 'cyan' },
+                      { label: 'Red Squad', rows: redStats, tone: 'rose' },
+                    ] as const
+                  ).map((group) => (
+                    <div
+                      key={group.label}
+                      className={`bg-slate-950/75 border clip-chamfer p-2 ${
+                        group.tone === 'cyan' ? 'border-cyan-500/25' : 'border-rose-500/25'
+                      }`}
+                    >
+                      <div
+                        className={`flex items-center justify-between text-[9px] font-mono font-black uppercase tracking-widest pb-1 mb-1 border-b ${
+                          group.tone === 'cyan'
+                            ? 'text-cyan-300 border-cyan-500/20'
+                            : 'text-rose-300 border-rose-500/20'
+                        }`}
+                      >
+                        <span>{group.label}</span>
+                        <div className="flex items-center gap-2.5 text-slate-400">
+                          {isCTF && <span className="w-5 text-right">C</span>}
+                          <span className="w-5 text-right">K</span>
+                          <span className="w-5 text-right">D</span>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        {group.rows.map((row) => {
+                          const isMe = row.playerId === localPlayerId;
+                          return (
+                            <div
+                              key={row.playerId}
+                              className={`flex items-center justify-between px-1.5 py-0.5 text-[10px] font-mono clip-chamfer ${
+                                isMe
+                                  ? group.tone === 'cyan'
+                                    ? 'bg-cyan-500/15 text-white font-bold'
+                                    : 'bg-rose-500/15 text-white font-bold'
+                                  : 'text-slate-300'
+                              }`}
+                            >
+                              <span className="truncate pr-1.5">
+                                {row.callsign}
+                                {isMe ? ' (YOU)' : ''}
+                              </span>
+                              <div className="flex items-center gap-2.5 shrink-0 font-bold">
+                                {isCTF && (
+                                  <span className="w-5 text-right text-amber-300">
+                                    {row.captures}
+                                  </span>
+                                )}
+                                <span
+                                  className={`w-5 text-right ${
+                                    group.tone === 'cyan' ? 'text-cyan-300' : 'text-rose-300'
+                                  }`}
+                                >
+                                  {row.kills}
+                                </span>
+                                <span className="w-5 text-right text-slate-400">{row.deaths}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
 
           {/* Rematch & Leave Actions */}

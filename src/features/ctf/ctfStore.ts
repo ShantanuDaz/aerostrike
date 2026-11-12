@@ -8,9 +8,9 @@ import {
   type Team,
 } from './types';
 import type { GameMap } from '../map/types';
-import type { MatchSyncStatePayload } from '../network/types';
+import type { KillFeedEvent, MatchSyncStatePayload } from '../network/types';
 import { sounds } from '../audio/soundEngine';
-import { useMatchStatsStore } from '../combat/statsStore';
+import { sortFFAStandings, useMatchStatsStore } from '../combat/statsStore';
 
 export type BannerTone = 'cyan' | 'blue' | 'red' | 'amber';
 
@@ -57,6 +57,8 @@ interface CTFState {
   isOvertime: boolean;
   matchStatus: MatchStatus;
   winner: Team | null;
+  winnerId: string | null;
+  winnerCallsign: string | null;
   bannerMessage: string | null;
   bannerTone: BannerTone;
   stateSeq: number;
@@ -81,6 +83,7 @@ interface CTFState {
   dropFlag: (team: Team, x: number, y: number) => boolean;
   returnFlag: (team: Team) => boolean;
   captureFlag: (scoringTeam: Team, carrierName?: string, carrierId?: string) => boolean;
+  recordAuthoritativeKill: (evt: KillFeedEvent) => void;
   tickTimers: (
     deltaSec: number,
     canAutoReturn?: boolean,
@@ -125,6 +128,8 @@ export const useCTFStore = create<CTFState>((set, get) => ({
   isOvertime: false,
   matchStatus: 'playing',
   winner: null,
+  winnerId: null,
+  winnerCallsign: null,
   bannerMessage: null,
   bannerTone: 'cyan',
   stateSeq: 0,
@@ -149,6 +154,9 @@ export const useCTFStore = create<CTFState>((set, get) => ({
       targetCaptures: DEFAULT_MATCH_RULES.targetCaptures,
       timeRemainingSec: DEFAULT_MATCH_RULES.timeLimitSec,
       isOvertime: false,
+      winner: null,
+      winnerId: null,
+      winnerCallsign: null,
     });
   },
 
@@ -156,6 +164,7 @@ export const useCTFStore = create<CTFState>((set, get) => ({
     const curr = get();
     const nextRules = rules ? sanitizeMatchRules(rules, curr.matchRules) : curr.matchRules;
     const rulesChanged =
+      nextRules.mode !== curr.matchRules.mode ||
       nextRules.targetCaptures !== curr.matchRules.targetCaptures ||
       nextRules.timeLimitSec !== curr.matchRules.timeLimitSec ||
       nextRules.respawnDelaySec !== curr.matchRules.respawnDelaySec;
@@ -198,6 +207,12 @@ export const useCTFStore = create<CTFState>((set, get) => ({
       ? sanitizeMatchRules(rulesOverride, get().matchRules)
       : get().matchRules;
     liveClockSec = rules.timeLimitSec;
+    const startBanner =
+      rules.mode === 'ffa'
+        ? 'FREE FOR ALL! MOST KILLS IN TIME WINS!'
+        : rules.mode === 'tdm'
+          ? 'TEAM KILLS! SCORE MORE KILLS THAN THE RIVAL SQUAD!'
+          : 'MATCH STARTED! CAPTURE THE ENEMY FLAG!';
 
     set((state) => ({
       score: { blue: 0, red: 0 },
@@ -206,8 +221,10 @@ export const useCTFStore = create<CTFState>((set, get) => ({
       timeRemainingSec: rules.timeLimitSec,
       isOvertime: false,
       winner: null,
+      winnerId: null,
+      winnerCallsign: null,
       matchStatus: 'playing',
-      bannerMessage: 'MATCH STARTED! CAPTURE THE ENEMY FLAG!',
+      bannerMessage: startBanner,
       bannerTone: 'cyan',
       stateSeq: state.stateSeq + 1,
       matchGeneration: state.matchGeneration + 1,
@@ -247,6 +264,12 @@ export const useCTFStore = create<CTFState>((set, get) => ({
       ? sanitizeMatchRules(rulesOverride, get().matchRules)
       : get().matchRules;
     liveClockSec = rules.timeLimitSec;
+    const startBanner =
+      rules.mode === 'ffa'
+        ? 'FREE FOR ALL! MOST KILLS IN TIME WINS!'
+        : rules.mode === 'tdm'
+          ? 'TEAM KILLS! SCORE MORE KILLS THAN THE RIVAL SQUAD!'
+          : 'MATCH STARTED! CAPTURE THE ENEMY FLAG!';
 
     set((state) => ({
       score: { blue: 0, red: 0 },
@@ -255,8 +278,10 @@ export const useCTFStore = create<CTFState>((set, get) => ({
       timeRemainingSec: rules.timeLimitSec,
       isOvertime: false,
       winner: null,
+      winnerId: null,
+      winnerCallsign: null,
       matchStatus: 'playing',
-      bannerMessage: 'MATCH STARTED! CAPTURE THE ENEMY FLAG!',
+      bannerMessage: startBanner,
       bannerTone: 'cyan',
       stateSeq: 0,
       matchGeneration: state.matchGeneration + 1,
@@ -288,6 +313,7 @@ export const useCTFStore = create<CTFState>((set, get) => ({
   },
 
   pickupFlag: (team, carrierId) => {
+    if (get().matchRules.mode !== 'ctf') return false;
     const flag = get().flags[team];
     if (flag.status === 'carried') return false;
 
@@ -311,6 +337,7 @@ export const useCTFStore = create<CTFState>((set, get) => ({
   },
 
   dropFlag: (team, x, y) => {
+    if (get().matchRules.mode !== 'ctf') return false;
     const flag = get().flags[team];
     if (flag.status !== 'carried') return false;
 
@@ -335,6 +362,7 @@ export const useCTFStore = create<CTFState>((set, get) => ({
   },
 
   returnFlag: (team) => {
+    if (get().matchRules.mode !== 'ctf') return false;
     const flag = get().flags[team];
     if (flag.status === 'at_base') return false;
     sounds.playFlagReturn();
@@ -360,6 +388,7 @@ export const useCTFStore = create<CTFState>((set, get) => ({
 
   captureFlag: (scoringTeam, carrierName = 'Soldier', carrierId) => {
     const state = get();
+    if (state.matchRules.mode !== 'ctf') return false;
     if (state.matchStatus !== 'playing') return false;
 
     const enemyTeam: Team = scoringTeam === 'blue' ? 'red' : 'blue';
@@ -431,23 +460,67 @@ export const useCTFStore = create<CTFState>((set, get) => ({
     return true;
   },
 
+  recordAuthoritativeKill: (evt) => {
+    const recorded = useMatchStatsStore.getState().recordKill(evt);
+    if (!recorded) return;
+
+    const state = get();
+    if (state.matchStatus !== 'playing') {
+      set((curr) => ({ stateSeq: curr.stateSeq + 1 }));
+      return;
+    }
+
+    const isCombatKill =
+      evt.killerId !== evt.victimId &&
+      evt.weaponType !== 'hazard' &&
+      evt.weaponType !== 'self' &&
+      Boolean(evt.killerId);
+
+    if (state.matchRules.mode === 'tdm' && isCombatKill) {
+      const killerTeam: Team = evt.killerTeam === 'red' ? 'red' : 'blue';
+      const newScore = {
+        ...state.score,
+        [killerTeam]: state.score[killerTeam] + 1,
+      };
+      const hasWon = state.isOvertime;
+      if (hasWon) {
+        sounds.playFlagCapture();
+      }
+      set((curr) => ({
+        stateSeq: curr.stateSeq + 1,
+        score: newScore,
+        matchStatus: hasWon ? 'game_over' : curr.matchStatus,
+        winner: hasWon ? killerTeam : curr.winner,
+        bannerMessage: hasWon
+          ? `OVERTIME VICTORY • TEAM ${killerTeam.toUpperCase()} WINS!`
+          : curr.bannerMessage,
+        bannerTone: hasWon ? killerTeam : curr.bannerTone,
+      }));
+      return;
+    }
+
+    set((curr) => ({ stateSeq: curr.stateSeq + 1 }));
+  },
+
   tickTimers: (deltaSec, canAutoReturn = true, isAuthoritativeClock = true) => {
     const { flags, matchStatus, matchRules, isOvertime, timeRemainingSec, score } = get();
     if (matchStatus !== 'playing') return null;
 
     let returnedTeam: Team | null = null;
-    for (const team of ['blue', 'red'] as Team[]) {
-      const flag = flags[team];
-      if (flag.status === 'dropped') {
-        const nextTimer = flag.returnTimer - deltaSec;
-        if (nextTimer <= 0) {
-          flag.returnTimer = 0;
-          if (canAutoReturn && get().returnFlag(team)) {
-            returnedTeam = team;
+    if (matchRules.mode === 'ctf') {
+      for (const team of ['blue', 'red'] as Team[]) {
+        const flag = flags[team];
+        if (flag.status === 'dropped') {
+          const nextTimer = flag.returnTimer - deltaSec;
+          if (nextTimer <= 0) {
+            flag.returnTimer = 0;
+            if (canAutoReturn && get().returnFlag(team)) {
+              returnedTeam = team;
+            }
+          } else {
+            // Mutate countdown timer silently without forcing 60 FPS HUD React re-renders
+            flag.returnTimer = nextTimer;
           }
-        } else {
-          // Mutate countdown timer silently without forcing 60 FPS HUD React re-renders
-          flag.returnTimer = nextTimer;
         }
       }
     }
@@ -458,13 +531,34 @@ export const useCTFStore = create<CTFState>((set, get) => ({
 
       if (liveClockSec <= 0) {
         if (isAuthoritativeClock) {
-          if (score.blue === score.red) {
+          if (matchRules.mode === 'ffa') {
+            const standings = sortFFAStandings(useMatchStatsStore.getState().exportPlayerStats());
+            const top = standings[0] ?? null;
+            sounds.playFlagCapture();
+            set((curr) => ({
+              stateSeq: curr.stateSeq + 1,
+              timeRemainingSec: 0,
+              isOvertime: false,
+              matchStatus: 'game_over',
+              winner: null,
+              winnerId: top?.playerId ?? null,
+              winnerCallsign: top?.callsign ?? null,
+              bannerMessage: top
+                ? `TIME EXPIRED • #1 ${top.callsign.toUpperCase()} WINS!`
+                : 'TIME EXPIRED • MATCH COMPLETE!',
+              bannerTone: 'cyan',
+            }));
+          } else if (score.blue === score.red) {
             sounds.playFlagPickup();
+            const otBanner =
+              matchRules.mode === 'tdm'
+                ? 'SUDDEN DEATH OVERTIME • NEXT KILL WINS!'
+                : 'SUDDEN DEATH OVERTIME • NEXT CAPTURE WINS!';
             set((curr) => ({
               stateSeq: curr.stateSeq + 1,
               timeRemainingSec: 0,
               isOvertime: true,
-              bannerMessage: 'SUDDEN DEATH OVERTIME • NEXT CAPTURE WINS!',
+              bannerMessage: otBanner,
               bannerTone: 'amber',
             }));
             scheduleBannerClear((msg) => set({ bannerMessage: msg }), 3500);
@@ -477,6 +571,8 @@ export const useCTFStore = create<CTFState>((set, get) => ({
               isOvertime: false,
               matchStatus: 'game_over',
               winner: timeWinner,
+              winnerId: null,
+              winnerCallsign: null,
               bannerMessage: `TIME EXPIRED • TEAM ${timeWinner.toUpperCase()} WINS!`,
               bannerTone: timeWinner,
             }));
@@ -514,6 +610,9 @@ export const useCTFStore = create<CTFState>((set, get) => ({
       isOvertime: state.isOvertime,
       matchStatus: state.matchStatus,
       winner: state.winner,
+      winnerId: state.winnerId,
+      winnerCallsign: state.winnerCallsign,
+      playerStats: useMatchStatsStore.getState().exportPlayerStats(),
       bannerMessage: state.bannerMessage,
       lastScorer: state.lastScorer,
       flags: {
@@ -542,13 +641,13 @@ export const useCTFStore = create<CTFState>((set, get) => ({
         };
 
     if (
-      nextScoreTotal > prevScoreTotal ||
+      (nextRules.mode === 'ctf' && nextScoreTotal > prevScoreTotal) ||
       (payload.matchStatus === 'game_over' && curr.matchStatus !== 'game_over')
     ) {
       sounds.playFlagCapture();
     } else if (payload.isOvertime && !curr.isOvertime) {
       sounds.playFlagPickup();
-    } else {
+    } else if (nextRules.mode === 'ctf') {
       for (const team of ['blue', 'red'] as Team[]) {
         const prevStatus = curr.flags[team].status;
         const nextStatus = payload.flags[team].status;
@@ -574,6 +673,8 @@ export const useCTFStore = create<CTFState>((set, get) => ({
       isOvertime: Boolean(payload.isOvertime),
       matchStatus: payload.matchStatus,
       winner: payload.winner,
+      winnerId: payload.winnerId ?? null,
+      winnerCallsign: payload.winnerCallsign ?? null,
       bannerMessage: payload.bannerMessage,
       bannerTone: deriveBannerTone(
         payload.bannerMessage,
@@ -586,6 +687,10 @@ export const useCTFStore = create<CTFState>((set, get) => ({
         red: { ...payload.flags.red },
       },
     });
+
+    if (payload.playerStats) {
+      useMatchStatsStore.getState().applyAuthoritativeStats(payload.playerStats);
+    }
 
     if (payload.lastScorer) {
       useMatchStatsStore

@@ -83,4 +83,26 @@ describe('resolveHazardKillAttribution', () => {
     });
     expect(selfCreditIgnored.killerId).toBe('hazard');
   });
+
+  it('credits same-team hazard assists in FFA when allowFriendlyFire is true', () => {
+    const ffaEvt = resolveHazardKillAttribution({
+      victimId: 'bot_blue_2',
+      victimCallsign: 'VIPER-AI',
+      victimTeam: 'blue',
+      localPlayer: { id: 'local_1', team: 'blue', callsign: 'ACE' },
+      localPlayerId: 'local_1',
+      recentAttacker: {
+        dealerId: 'local_1',
+        weaponType: 'grenade',
+        atMs: 5000,
+      },
+      isMultiplayer: false,
+      allowFriendlyFire: true,
+      nowMs: 6500,
+    });
+
+    expect(ffaEvt.killerId).toBe('local_1');
+    expect(ffaEvt.killerCallsign).toBe('ACE');
+    expect(ffaEvt.weaponType).toBe('grenade');
+  });
 });

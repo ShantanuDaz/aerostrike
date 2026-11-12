@@ -116,7 +116,9 @@ export function syncAndRenderMinimap(
     }
   }
 
-  const latestFlags = useCTFStore.getState().flags;
+  const ctfState = useCTFStore.getState();
+  const latestFlags = ctfState.flags;
+  const activeMode = ctfState.matchRules.mode;
   const highContrast = useSettingsStore.getState().highContrastTeamMarkers;
   renderMinimap(
     mmCtx,
@@ -125,12 +127,15 @@ export function syncAndRenderMinimap(
     map,
     currentCamera,
     minimapPlayersBuf,
-    [
-      { x: latestFlags.blue.x, y: latestFlags.blue.y, team: 'blue' },
-      { x: latestFlags.red.x, y: latestFlags.red.y, team: 'red' },
-    ],
+    activeMode === 'ctf'
+      ? [
+          { x: latestFlags.blue.x, y: latestFlags.blue.y, team: 'blue' },
+          { x: latestFlags.red.x, y: latestFlags.red.y, team: 'red' },
+        ]
+      : [],
     engineWorld.stations,
     highContrast,
+    activeMode,
   );
 }
 
@@ -432,6 +437,8 @@ export function renderArenaFrame(params: RenderArenaFrameParams) {
   } = params;
 
   const settings = useSettingsStore.getState();
+  const ctfState = useCTFStore.getState();
+  const activeMode = ctfState.matchRules.mode;
   const zoom = currentCamera.zoom > 0 ? currentCamera.zoom : 1;
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -468,7 +475,9 @@ export function renderArenaFrame(params: RenderArenaFrameParams) {
   renderMap(ctx, map, timeSec, true);
   renderRefillStations(ctx, engineWorld.stations, timeSec);
   renderWeaponPickups(ctx, engineWorld.pickups, timeSec);
-  renderFlags(ctx, Object.values(useCTFStore.getState().flags), timeSec);
+  if (activeMode === 'ctf') {
+    renderFlags(ctx, Object.values(ctfState.flags), timeSec);
+  }
 
   for (const ragdoll of ragdolls) {
     renderRagdoll(ctx, ragdoll, timeSec);
@@ -543,6 +552,7 @@ export function renderArenaFrame(params: RenderArenaFrameParams) {
       false,
       zoom,
       settings.highContrastTeamMarkers,
+      activeMode,
     );
   }
 
@@ -558,6 +568,7 @@ export function renderArenaFrame(params: RenderArenaFrameParams) {
         false,
         zoom,
         settings.highContrastTeamMarkers,
+        activeMode,
       );
     }
   }
@@ -571,6 +582,7 @@ export function renderArenaFrame(params: RenderArenaFrameParams) {
     true,
     zoom,
     settings.highContrastTeamMarkers,
+    activeMode,
   );
 
   // Floating comms bubbles (emojis / short chat callouts) & voice speaking indicator
@@ -716,74 +728,76 @@ export function renderArenaFrame(params: RenderArenaFrameParams) {
     }
   }
 
-  const currentFlags = useCTFStore.getState().flags;
-  const friendlyTeam = localPlayer.team;
-  const enemyTeam = friendlyTeam === 'blue' ? 'red' : 'blue';
-  const enemyFlag = currentFlags[enemyTeam];
-  const friendlyFlag = currentFlags[friendlyTeam];
+  if (activeMode === 'ctf') {
+    const currentFlags = ctfState.flags;
+    const friendlyTeam = localPlayer.team;
+    const enemyTeam = friendlyTeam === 'blue' ? 'red' : 'blue';
+    const enemyFlag = currentFlags[enemyTeam];
+    const friendlyFlag = currentFlags[friendlyTeam];
 
-  const resolveFlagWorldPos = (flag: typeof enemyFlag) => {
-    let wx = flag.x;
-    let wy = flag.y;
-    if (flag.status === 'carried' && flag.carrierId) {
-      const carrierRemote = engineWorld.remotePlayers.get(flag.carrierId);
-      const carrierBot = !isMultiplayer ? engineWorld.getSoloBot(flag.carrierId) : undefined;
-      if (carrierRemote) {
-        wx = carrierRemote.renderX;
-        wy = carrierRemote.renderY;
-      } else if (carrierBot) {
-        wx = carrierBot.player.x;
-        wy = carrierBot.player.y;
-      } else if (flag.carrierId === localPlayer.id || flag.carrierId === myPlayerId) {
-        wx = friendlyFlag.baseX;
-        wy = friendlyFlag.baseY;
+    const resolveFlagWorldPos = (flag: typeof enemyFlag) => {
+      let wx = flag.x;
+      let wy = flag.y;
+      if (flag.status === 'carried' && flag.carrierId) {
+        const carrierRemote = engineWorld.remotePlayers.get(flag.carrierId);
+        const carrierBot = !isMultiplayer ? engineWorld.getSoloBot(flag.carrierId) : undefined;
+        if (carrierRemote) {
+          wx = carrierRemote.renderX;
+          wy = carrierRemote.renderY;
+        } else if (carrierBot) {
+          wx = carrierBot.player.x;
+          wy = carrierBot.player.y;
+        } else if (flag.carrierId === localPlayer.id || flag.carrierId === myPlayerId) {
+          wx = friendlyFlag.baseX;
+          wy = friendlyFlag.baseY;
+        }
       }
-    }
-    return { wx, wy };
-  };
+      return { wx, wy };
+    };
 
-  // Primary objective indicator (enemy flag, or home base when carrying)
-  const primaryPos = localPlayer.carryingFlag
-    ? { wx: friendlyFlag.baseX, wy: friendlyFlag.baseY }
-    : resolveFlagWorldPos(enemyFlag);
-  const primaryColor = localPlayer.carryingFlag
-    ? '#34d399'
-    : enemyTeam === 'red'
-      ? '#fb7185'
-      : '#38bdf8';
-  const primaryLabel = localPlayer.carryingFlag
-    ? 'HOME'
-    : enemyFlag.status === 'dropped'
-      ? `${Math.max(1, Math.ceil(enemyFlag.returnTimer))}s`
-      : 'FLAG';
-  drawOffscreenFlagIndicator(
-    ctx,
-    primaryPos.wx,
-    primaryPos.wy,
-    currentCamera,
-    viewW,
-    viewH,
-    primaryColor,
-    primaryLabel,
-  );
-
-  // Secondary alert indicator when our friendly flag is away from base
-  if (friendlyFlag.status !== 'at_base') {
-    const friendlyPos = resolveFlagWorldPos(friendlyFlag);
-    const secLabel =
-      friendlyFlag.status === 'dropped'
-        ? `RET ${Math.max(1, Math.ceil(friendlyFlag.returnTimer))}s`
-        : 'DEFEND';
+    // Primary objective indicator (enemy flag, or home base when carrying)
+    const primaryPos = localPlayer.carryingFlag
+      ? { wx: friendlyFlag.baseX, wy: friendlyFlag.baseY }
+      : resolveFlagWorldPos(enemyFlag);
+    const primaryColor = localPlayer.carryingFlag
+      ? '#34d399'
+      : enemyTeam === 'red'
+        ? '#fb7185'
+        : '#38bdf8';
+    const primaryLabel = localPlayer.carryingFlag
+      ? 'HOME'
+      : enemyFlag.status === 'dropped'
+        ? `${Math.max(1, Math.ceil(enemyFlag.returnTimer))}s`
+        : 'FLAG';
     drawOffscreenFlagIndicator(
       ctx,
-      friendlyPos.wx,
-      friendlyPos.wy,
+      primaryPos.wx,
+      primaryPos.wy,
       currentCamera,
       viewW,
       viewH,
-      '#fbbf24',
-      secLabel,
+      primaryColor,
+      primaryLabel,
     );
+
+    // Secondary alert indicator when our friendly flag is away from base
+    if (friendlyFlag.status !== 'at_base') {
+      const friendlyPos = resolveFlagWorldPos(friendlyFlag);
+      const secLabel =
+        friendlyFlag.status === 'dropped'
+          ? `RET ${Math.max(1, Math.ceil(friendlyFlag.returnTimer))}s`
+          : 'DEFEND';
+      drawOffscreenFlagIndicator(
+        ctx,
+        friendlyPos.wx,
+        friendlyPos.wy,
+        currentCamera,
+        viewW,
+        viewH,
+        '#fbbf24',
+        secLabel,
+      );
+    }
   }
 
   crosshairSpreadRef.current = Math.max(0, crosshairSpreadRef.current - dt * 36);

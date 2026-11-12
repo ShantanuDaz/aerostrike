@@ -1,4 +1,5 @@
 import type { ActiveRefillStation, GameMap } from './types';
+import type { GameMode } from '../ctf/types';
 import { getCompiledTerrainShapes } from './terrainGeometry';
 import { getMapThemePalette } from './renderBackdrop';
 import { getWorldViewportSize, type Camera } from '../camera';
@@ -30,6 +31,7 @@ export function renderMinimap(
   flags: MinimapFlagMarker[],
   stations?: ActiveRefillStation[],
   highContrast: boolean = false,
+  mode: GameMode = 'ctf',
 ): void {
   // Clear minimap
   ctx.clearRect(0, 0, width, height);
@@ -88,24 +90,26 @@ export function renderMinimap(
     }
   }
 
-  // 2. Draw Base Highlights
-  if (map.baseBlue) {
-    ctx.fillStyle = 'rgba(59, 130, 246, 0.25)';
-    ctx.fillRect(
-      map.baseBlue.x * scaleX,
-      map.baseBlue.y * scaleY,
-      map.baseBlue.width * scaleX,
-      map.baseBlue.height * scaleY,
-    );
-  }
-  if (map.baseRed) {
-    ctx.fillStyle = 'rgba(239, 68, 68, 0.25)';
-    ctx.fillRect(
-      map.baseRed.x * scaleX,
-      map.baseRed.y * scaleY,
-      map.baseRed.width * scaleX,
-      map.baseRed.height * scaleY,
-    );
+  // 2. Draw Base Highlights (CTF / TDM only)
+  if (mode !== 'ffa') {
+    if (map.baseBlue) {
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.25)';
+      ctx.fillRect(
+        map.baseBlue.x * scaleX,
+        map.baseBlue.y * scaleY,
+        map.baseBlue.width * scaleX,
+        map.baseBlue.height * scaleY,
+      );
+    }
+    if (map.baseRed) {
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.25)';
+      ctx.fillRect(
+        map.baseRed.x * scaleX,
+        map.baseRed.y * scaleY,
+        map.baseRed.width * scaleX,
+        map.baseRed.height * scaleY,
+      );
+    }
   }
 
   // 3. Draw Flags & Arena Utilities (Bounce Pads / Refill Stations)
@@ -143,16 +147,18 @@ export function renderMinimap(
     }
   }
 
-  for (const flag of flags) {
-    ctx.save();
-    ctx.fillStyle = flag.team === 'blue' ? '#38bdf8' : '#f87171';
-    ctx.beginPath();
-    ctx.arc(flag.x * scaleX, flag.y * scaleY, 3.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.restore();
+  if (mode === 'ctf') {
+    for (const flag of flags) {
+      ctx.save();
+      ctx.fillStyle = flag.team === 'blue' ? '#38bdf8' : '#f87171';
+      ctx.beginPath();
+      ctx.arc(flag.x * scaleX, flag.y * scaleY, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   // 4. Draw Camera Frustum (Zoom-aware Viewport Box, clipped neatly to arena bounds)
@@ -190,6 +196,19 @@ export function renderMinimap(
       ctx.strokeStyle = '#86efac';
       ctx.lineWidth = 1;
       ctx.stroke();
+    } else if (mode === 'ffa') {
+      // All other pilots in Free For All are hostile targets
+      ctx.fillStyle = highContrast ? '#fb7185' : '#f43f5e';
+      ctx.beginPath();
+      if (highContrast) {
+        ctx.moveTo(px, py - 3.4);
+        ctx.lineTo(px + 3.2, py + 2.8);
+        ctx.lineTo(px - 3.2, py + 2.8);
+        ctx.closePath();
+      } else {
+        ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+      }
+      ctx.fill();
     } else if (highContrast) {
       ctx.fillStyle = p.team === 'blue' ? '#38bdf8' : '#fb7185';
       ctx.beginPath();
@@ -212,8 +231,8 @@ export function renderMinimap(
       ctx.fill();
     }
 
-    // Flag carrier marker: pulsing outer ring
-    if (p.hasFlag) {
+    // Flag carrier marker: pulsing outer ring (CTF only)
+    if (mode === 'ctf' && p.hasFlag) {
       ctx.strokeStyle = '#facc15';
       ctx.lineWidth = 1.5;
       ctx.beginPath();

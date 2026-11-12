@@ -119,7 +119,9 @@ export function MinimapView({ map }: MinimapViewProps) {
       const ctx = canvas.getContext('2d');
       if (ctx) {
         const local = engineWorld.localPlayer ?? usePlayerStore.getState().player;
-        const flags = useCTFStore.getState().flags;
+        const ctfState = useCTFStore.getState();
+        const flags = ctfState.flags;
+        const gameMode = ctfState.matchRules.mode;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         renderMinimap(
           ctx,
@@ -145,12 +147,15 @@ export function MinimapView({ map }: MinimapViewProps) {
                 hasFlag: rp.carryingFlag,
               })),
           ],
-          [
-            { x: flags.blue.x, y: flags.blue.y, team: 'blue' },
-            { x: flags.red.x, y: flags.red.y, team: 'red' },
-          ],
+          gameMode === 'ctf'
+            ? [
+                { x: flags.blue.x, y: flags.blue.y, team: 'blue' },
+                { x: flags.red.x, y: flags.red.y, team: 'red' },
+              ]
+            : [],
           engineWorld.stations,
           highContrast,
+          gameMode,
         );
       }
     }

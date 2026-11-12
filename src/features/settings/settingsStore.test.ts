@@ -11,6 +11,8 @@ import {
   MIN_TOUCH_CONTROL_OPACITY,
   MIN_TOUCH_CONTROL_SCALE,
   MIN_TOUCH_DEADZONE,
+  SETTINGS_SCHEMA_VERSION,
+  loadStoredSettings,
   useSettingsStore,
 } from './settingsStore';
 
@@ -98,5 +100,24 @@ describe('settingsStore audio decoupling & zoom/touch settings', () => {
     expect(state.touchControlScale).toBe(MIN_TOUCH_CONTROL_SCALE);
     expect(state.touchControlOpacity).toBe(MIN_TOUCH_CONTROL_OPACITY);
     expect(state.touchStickDeadzone).toBe(MIN_TOUCH_DEADZONE);
+  });
+
+  it('migrates legacy v1 instant touchAimMode to precision while preserving explicit v2 choice', () => {
+    localStorage.setItem(
+      'aerostrike_settings_v1',
+      JSON.stringify({ touchAimMode: 'instant', masterVolume: 65 }),
+    );
+    const migrated = loadStoredSettings();
+    expect(migrated.settingsVersion).toBe(SETTINGS_SCHEMA_VERSION);
+    expect(migrated.touchAimMode).toBe('precision');
+    expect(migrated.masterVolume).toBe(65);
+
+    localStorage.setItem(
+      'aerostrike_settings_v1',
+      JSON.stringify({ settingsVersion: SETTINGS_SCHEMA_VERSION, touchAimMode: 'instant' }),
+    );
+    const explicitV2 = loadStoredSettings();
+    expect(explicitV2.touchAimMode).toBe('instant');
+    localStorage.removeItem('aerostrike_settings_v1');
   });
 });

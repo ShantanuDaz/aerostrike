@@ -48,6 +48,7 @@ export function clampTouchDeadzone(deadzone: number): number {
 }
 
 export interface GameSettings {
+  settingsVersion?: number;
   masterVolume: number;
   sfxMuted: boolean;
   musicEnabled: boolean;
@@ -75,8 +76,10 @@ export interface GameSettings {
 }
 
 const SETTINGS_STORAGE_KEY = 'aerostrike_settings_v1';
+export const SETTINGS_SCHEMA_VERSION = 2;
 
 export const DEFAULT_SETTINGS: GameSettings = {
+  settingsVersion: SETTINGS_SCHEMA_VERSION,
   masterVolume: 80,
   sfxMuted: false,
   musicEnabled: true,
@@ -110,12 +113,24 @@ const VALID_HUD_SCALES: HudScale[] = ['compact', 'standard', 'large'];
 const VALID_TOUCH_AIM_MODES: TouchAimMode[] = ['instant', 'precision'];
 const VALID_TOUCH_LAYOUTS: TouchLayout[] = ['right_handed', 'left_handed'];
 
-function loadStoredSettings(): GameSettings {
+export function loadStoredSettings(): GameSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
     if (!raw) return DEFAULT_SETTINGS;
     const parsed = JSON.parse(raw) as Partial<GameSettings>;
+    const storedVersion =
+      typeof parsed.settingsVersion === 'number' ? parsed.settingsVersion : 1;
+    // v1 defaulted touchAimMode to 'instant'; migrate legacy unversioned settings
+    // once to perimeter-fire ('precision') so dragging inside the aim circle aims
+    // and reaching the perimeter fires. Explicit v2+ selections are preserved.
+    const resolvedTouchAimMode =
+      storedVersion < SETTINGS_SCHEMA_VERSION
+        ? 'precision'
+        : VALID_TOUCH_AIM_MODES.includes(parsed.touchAimMode as TouchAimMode)
+          ? (parsed.touchAimMode as TouchAimMode)
+          : DEFAULT_SETTINGS.touchAimMode;
     return {
+      settingsVersion: SETTINGS_SCHEMA_VERSION,
       masterVolume:
         typeof parsed.masterVolume === 'number'
           ? Math.max(0, Math.min(100, parsed.masterVolume))
@@ -176,9 +191,7 @@ function loadStoredSettings(): GameSettings {
         typeof parsed.highContrastTeamMarkers === 'boolean'
           ? parsed.highContrastTeamMarkers
           : DEFAULT_SETTINGS.highContrastTeamMarkers,
-      touchAimMode: VALID_TOUCH_AIM_MODES.includes(parsed.touchAimMode as TouchAimMode)
-        ? (parsed.touchAimMode as TouchAimMode)
-        : DEFAULT_SETTINGS.touchAimMode,
+      touchAimMode: resolvedTouchAimMode,
       touchLayout: VALID_TOUCH_LAYOUTS.includes(parsed.touchLayout as TouchLayout)
         ? (parsed.touchLayout as TouchLayout)
         : DEFAULT_SETTINGS.touchLayout,
@@ -232,7 +245,10 @@ function syncAudioEngines(settings: GameSettings) {
 
 function persistSettings(next: GameSettings) {
   try {
-    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next));
+    localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({ ...next, settingsVersion: SETTINGS_SCHEMA_VERSION }),
+    );
   } catch {
     // ignore storage quota or private mode failures
   }
@@ -254,6 +270,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   updateSettings: (patch) =>
     set((state) => {
       const next: GameSettings = {
+        settingsVersion: SETTINGS_SCHEMA_VERSION,
         masterVolume: patch.masterVolume ?? state.masterVolume,
         sfxMuted: patch.sfxMuted ?? state.sfxMuted,
         musicEnabled: patch.musicEnabled ?? state.musicEnabled,

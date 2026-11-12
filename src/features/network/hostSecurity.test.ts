@@ -207,10 +207,12 @@ describe('hostSecurity validation suite', () => {
       actorCallsign: 'Spectre',
     });
 
-    // Capture allowed only when carrying enemy flag & at own base while own flag is home
+    // Capture succeeds even when own Red flag is carried/stolen away from base
     const carriedFlags = makeFlags();
     carriedFlags.blue.status = 'carried';
     carriedFlags.blue.carrierId = 'pilot_red';
+    carriedFlags.red.status = 'carried';
+    carriedFlags.red.carrierId = 'pilot_host';
 
     expect(
       validateFlagEvent(
@@ -228,6 +230,30 @@ describe('hostSecurity validation suite', () => {
       actorCallsign: 'Spectre',
     });
 
+    // Flag events are completely rejected in non-CTF modes (TDM / FFA)
+    expect(
+      validateFlagEvent(
+        { action: 'capture', team: 'red' },
+        RED_CADET,
+        { x: 2780, y: 1000, isDead: false },
+        carriedFlags,
+        true,
+        'playing',
+        'tdm',
+      ),
+    ).toBeNull();
+    expect(
+      validateFlagEvent(
+        { action: 'pickup', team: 'blue' },
+        RED_CADET,
+        { x: 220, y: 1000, isDead: false },
+        makeFlags(),
+        true,
+        'playing',
+        'ffa',
+      ),
+    ).toBeNull();
+
     // Capture blocked during game_over
     expect(
       validateFlagEvent(
@@ -239,6 +265,60 @@ describe('hostSecurity validation suite', () => {
         'game_over',
       ),
     ).toBeNull();
+  });
+
+  it('allows friendly fire damage & kill feed events only in FFA mode', () => {
+    const tracker = new DamageRateTracker();
+    const blueCadet: RosterMember = {
+      ...RED_CADET,
+      playerId: 'pilot_blue_2',
+      peerId: 'peer_blue_2',
+      callsign: 'Blaze',
+      team: 'blue',
+    };
+
+    // Same-team damage rejected in CTF/TDM, allowed in FFA
+    const sameTeamDmg = {
+      senderPeerId: 'peer_blue_2',
+      senderMember: blueCadet,
+      targetMember: BLUE_HOST,
+      hostPlayerId: 'pilot_host',
+      hostPeerId: 'host_peer',
+      localPlayer: { id: 'pilot_host', isDead: false, invulnerableTimer: 0 },
+      isInActiveBattle: true,
+      gamePhase: 'in_game' as const,
+      rateTracker: tracker,
+      nowMs: 1000,
+      payload: {
+        targetId: 'pilot_host',
+        dealerId: 'pilot_blue_2',
+        weaponType: 'rifle' as const,
+        damage: 14,
+        knockbackX: 1,
+        knockbackY: 0,
+      },
+    };
+    expect(validateIncomingDamage({ ...sameTeamDmg, mode: 'ctf' })).toBe(false);
+    expect(validateIncomingDamage({ ...sameTeamDmg, mode: 'tdm' })).toBe(false);
+    expect(validateIncomingDamage({ ...sameTeamDmg, mode: 'ffa' })).toBe(true);
+
+    // Same-team combat kill rejected in CTF, allowed in FFA
+    const sameTeamKill = {
+      id: 'k_same_team',
+      killerId: 'pilot_blue_2',
+      killerCallsign: 'Blaze',
+      killerTeam: 'blue' as const,
+      victimId: 'pilot_host',
+      victimCallsign: 'Commander',
+      victimTeam: 'blue' as const,
+      weaponType: 'rifle' as const,
+    };
+    expect(
+      validateIncomingKillFeed(sameTeamKill, 'peer_blue_2', blueCadet, true, 'in_game', 'ctf'),
+    ).toBeNull();
+    expect(
+      validateIncomingKillFeed(sameTeamKill, 'peer_blue_2', blueCadet, true, 'in_game', 'ffa'),
+    ).not.toBeNull();
   });
 
   it('strips isHost spoofing on peer_meta and validates shoot / kill_feed ownership', () => {
