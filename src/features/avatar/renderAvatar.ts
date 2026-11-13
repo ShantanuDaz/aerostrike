@@ -330,7 +330,7 @@ export function renderAvatar(
   if (facing === -1) {
     ctx.scale(1, -1);
   }
-  drawEquippedWeapon(ctx, weaponType);
+  drawEquippedWeapon(ctx, weaponType, { timeSec });
   ctx.restore();
 
   // 8. Front Trigger Arm

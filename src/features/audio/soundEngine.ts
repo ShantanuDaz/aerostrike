@@ -565,6 +565,56 @@ class SoundEngine {
     flareOsc.stop(t + 0.13);
   }
 
+  // --- WEAPON & EQUIPMENT FEEDBACK ---
+
+  public playWeaponPickup(weapon?: WeaponType) {
+    if (this.isMuted || this.masterVolume <= 0) return;
+    const dest = this.getOutputNode();
+    if (!this.ctx || !dest) return;
+
+    const t = this.ctx.currentTime;
+
+    // 1. Mechanical slide pull / rack transient (metallic scrape)
+    const rackOsc = this.ctx.createOscillator();
+    const rackGain = this.ctx.createGain();
+    rackOsc.type = 'triangle';
+    rackOsc.frequency.setValueAtTime(680, t);
+    rackOsc.frequency.exponentialRampToValueAtTime(1250, t + 0.04);
+    rackGain.gain.setValueAtTime(0.24, t);
+    rackGain.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
+    rackOsc.connect(rackGain);
+    rackGain.connect(dest);
+    rackOsc.start(t);
+    rackOsc.stop(t + 0.045);
+
+    // 2. Chamber snap / bolt locking forward
+    const lockOsc = this.ctx.createOscillator();
+    const lockGain = this.ctx.createGain();
+    lockOsc.type = 'sawtooth';
+    lockOsc.frequency.setValueAtTime(1600, t + 0.045);
+    lockOsc.frequency.exponentialRampToValueAtTime(320, t + 0.08);
+    lockGain.gain.setValueAtTime(0.35, t + 0.045);
+    lockGain.gain.exponentialRampToValueAtTime(0.001, t + 0.085);
+    lockOsc.connect(lockGain);
+    lockGain.connect(dest);
+    lockOsc.start(t + 0.045);
+    lockOsc.stop(t + 0.085);
+
+    // 3. High-tech tactical HUD lock chime
+    const chimeOsc = this.ctx.createOscillator();
+    const chimeGain = this.ctx.createGain();
+    chimeOsc.type = 'sine';
+    const baseFreq = weapon === 'rocket' ? 440 : weapon === 'sniper' ? 880 : 660;
+    chimeOsc.frequency.setValueAtTime(baseFreq, t + 0.08);
+    chimeOsc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, t + 0.16);
+    chimeGain.gain.setValueAtTime(0.22, t + 0.08);
+    chimeGain.gain.exponentialRampToValueAtTime(0.001, t + 0.17);
+    chimeOsc.connect(chimeGain);
+    chimeGain.connect(dest);
+    chimeOsc.start(t + 0.08);
+    chimeOsc.stop(t + 0.17);
+  }
+
   // --- CTF FANFARES ---
 
   public playFlagPickup() {

@@ -10,6 +10,7 @@ import {
 } from '../player';
 import { computeAutoCameraZoom, updateCamera, type Camera } from '../camera';
 import {
+  WEAPONS,
   updateBullets,
   updateParticles,
   createSparks,
@@ -762,8 +763,19 @@ export function stepArenaFrame(params: StepArenaFrameParams): StepArenaFrameResu
           );
         }
         useCombatStore.getState().grantWeaponPickup(pickup.weaponType);
-        sounds.playFlagPickup();
+        sounds.playWeaponPickup(pickup.weaponType);
         hapticPickup();
+        const wConfig = WEAPONS[pickup.weaponType];
+        if (wConfig) {
+          const ammoText = wConfig.maxAmmo === Infinity ? '∞' : `${wConfig.maxAmmo} RDS`;
+          engineWorld.addFloatingText(
+            postCtfLocal.x,
+            postCtfLocal.y - 34,
+            `+ ${wConfig.name.toUpperCase()} [${ammoText}]`,
+            wConfig.color,
+            1.22,
+          );
+        }
         pickup.respawnTimer = 20;
         if (isMultiplayer) {
           networkManager.broadcastPickupCollected(pickup.id, pickup.weaponType);

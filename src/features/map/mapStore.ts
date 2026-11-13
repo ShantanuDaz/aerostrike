@@ -3,6 +3,7 @@ import { availableMaps, ctfArenaMap } from './maps';
 import type { GameMap } from './types';
 
 export const MAP_ROTATION_ORDER: string[] = [
+  'catacomb-outpost',
   'ctf-canyon-arena',
   'helios-caldera',
   'bunker',

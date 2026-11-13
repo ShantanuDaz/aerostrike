@@ -408,88 +408,360 @@ export function drawHeadAndGear(
 }
 
 /**
- * Draws detailed weapon along local +X axis (upright, centered near trigger grip).
+ * Draws detailed, high-tech procedural weapon along local +X axis (upright, centered near trigger grip).
+ * Supports scaling and optional holographic pedestal presentation mode.
  */
 export function drawEquippedWeapon(
   ctx: CanvasRenderingContext2D,
   weaponType: WeaponType,
+  options?: { scale?: number; isHolo?: boolean; timeSec?: number },
 ): void {
+  const scale = options?.scale ?? 1;
+  const isHolo = Boolean(options?.isHolo);
+  const timeSec = options?.timeSec ?? 0;
+
   ctx.save();
+  if (scale !== 1) {
+    ctx.scale(scale, scale);
+  }
+
+  if (isHolo) {
+    ctx.shadowBlur = 10;
+    ctx.shadowColor =
+      weaponType === 'sniper'
+        ? '#38bdf8'
+        : weaponType === 'rocket'
+          ? '#ef4444'
+          : weaponType === 'shotgun'
+            ? '#f97316'
+            : weaponType === 'grenade'
+              ? '#84cc16'
+              : weaponType === 'rifle'
+                ? '#fbbf24'
+                : '#38bdf8';
+  }
 
   switch (weaponType) {
     case 'pistol': {
-      // Tactical Pistol
+      // --- TACTICAL COMBAT PISTOL ---
+      // 1. Polymer Frame & Trigger Guard
       ctx.fillStyle = '#18181b';
-      ctx.fillRect(-2, -3.5, 13, 4.2); // slide
+      ctx.fillRect(-2, -1, 12, 3);
+      // Grip with stippled texture
+      ctx.fillStyle = '#27272a';
+      ctx.fillRect(-2, 1, 4.5, 6.8);
       ctx.fillStyle = '#3f3f46';
-      ctx.fillRect(2, -3.5, 7, 1.6); // rail
+      ctx.fillRect(-1.5, 2, 3.5, 1);
+      ctx.fillRect(-1.5, 4, 3.5, 1);
+
+      // Trigger & trigger guard loop
+      ctx.strokeStyle = '#52525b';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(2.5, 1.2, 3.5, 4.2);
+      ctx.fillStyle = '#a1a1aa';
+      ctx.fillRect(3.8, 2.2, 1.2, 2.2);
+
+      // 2. Beveled Metal Slide with Cocking Serrations
       ctx.fillStyle = '#27272a';
-      ctx.fillRect(-1, 0.5, 4.2, 6); // grip
-      break;
-    }
-    case 'shotgun': {
-      // Combat Pump Shotgun
-      ctx.fillStyle = '#451a03'; // stock
-      ctx.fillRect(-7, -2, 8, 5);
-      ctx.fillStyle = '#18181b'; // receiver & barrel
-      ctx.fillRect(0, -3.8, 21, 3.8);
-      ctx.fillStyle = '#9a3412'; // pump grip
-      ctx.fillRect(9, 0, 7, 3);
-      ctx.fillStyle = '#27272a';
-      ctx.fillRect(1, 0, 4, 6);
-      break;
-    }
-    case 'sniper': {
-      // Rail Sniper Rifle
-      ctx.fillStyle = '#0f172a'; // stock + chassis
-      ctx.fillRect(-7, -2.5, 14, 5.5);
-      ctx.fillStyle = '#334155'; // long barrel
-      ctx.fillRect(7, -3.2, 22, 2.8);
-      ctx.fillStyle = '#38bdf8'; // glowing rail coil
-      ctx.fillRect(9, -1.8, 12, 1.4);
-      // Scope on top
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(2, -6.8, 11, 2.8);
-      ctx.fillStyle = '#38bdf8';
-      ctx.fillRect(12, -6.4, 1.5, 2);
-      // Grip
-      ctx.fillStyle = '#18181b';
-      ctx.fillRect(1, 2.5, 4, 5.5);
-      break;
-    }
-    case 'rocket': {
-      // Heavy RPG Launcher
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(-9, -4.5, 24, 7.5);
-      ctx.fillStyle = '#475569';
-      ctx.fillRect(-10, -5, 3, 8.5); // rear exhaust cone
-      ctx.fillRect(14, -5, 3, 8.5); // front nozzle
-      // Protruding Red Warhead
-      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(-3, -4.2, 16, 4.2);
+      ctx.fillStyle = '#3f3f46';
+      ctx.fillRect(-2, -4.2, 14, 1.5); // Top slide bevel
+
+      // Rear serrations
+      ctx.fillStyle = '#09090b';
+      ctx.fillRect(-2, -3.8, 1, 3);
+      ctx.fillRect(0, -3.8, 1, 3);
+
+      // 3. Under-barrel Tactical Module (Laser / Flashlight)
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(4, 0, 7.5, 2.2);
+      // Cyan/Red Laser Diode
+      ctx.fillStyle = isHolo ? '#38bdf8' : '#ef4444';
       ctx.beginPath();
-      ctx.moveTo(16, -3.5);
-      ctx.lineTo(22, -0.75);
-      ctx.lineTo(16, 2);
+      ctx.arc(11.5, 1.1, 0.9, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 4. Fiber-Optic Sights & Muzzle
+      ctx.fillStyle = '#22c55e'; // Green front sight post
+      ctx.fillRect(11, -5.2, 1.2, 1.2);
+      ctx.fillStyle = '#71717a'; // Muzzle compensator tip
+      ctx.fillRect(13, -3.6, 2, 2.8);
+      break;
+    }
+
+    case 'shotgun': {
+      // --- COMBAT SCATTERGUN (PUMP SHOTGUN) ---
+      // 1. Skeletonized Tactical Stock
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 1.8;
+      ctx.strokeRect(-9, -2, 8, 4.5);
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(-11, -3, 3, 6.5); // Rubber recoil butt-pad
+
+      // 2. Heavy Receiver
+      ctx.fillStyle = '#18181b';
+      ctx.fillRect(-1, -4.2, 11, 6.2);
+      // Ejection port with visible brass shell
+      ctx.fillStyle = '#09090b';
+      ctx.fillRect(1.5, -3.8, 5, 2.2);
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(2.5, -3.2, 3, 1.4);
+
+      // Ergonomic Pistol Grip
+      ctx.fillStyle = '#27272a';
+      ctx.fillRect(0, 1.8, 4.5, 6);
+
+      // 3. Extended Barrel & Mag Tube
+      ctx.fillStyle = '#3f3f46';
+      ctx.fillRect(10, -3.8, 15, 2.6); // Main barrel
+      ctx.fillStyle = '#27272a';
+      ctx.fillRect(10, -0.8, 13, 2.2); // Magazine tube
+
+      // Ribbed Vented Heat Shield on top
+      ctx.fillStyle = '#0f172a';
+      for (let s = 11; s <= 21; s += 2.5) {
+        ctx.fillRect(s, -4.8, 1.4, 1.2);
+      }
+
+      // 4. Textured Pump Slide
+      ctx.fillStyle = '#9a3412';
+      ctx.fillRect(11, -1.6, 8, 3.8);
+      ctx.fillStyle = '#ea580c';
+      ctx.fillRect(13, -1.6, 1.2, 3.8);
+      ctx.fillRect(16, -1.6, 1.2, 3.8);
+
+      // Heavy Muzzle Choke
+      ctx.fillStyle = '#71717a';
+      ctx.fillRect(24, -4.2, 2.5, 3.4);
+      break;
+    }
+
+    case 'sniper': {
+      // --- ELECTROMAGNETIC RAIL SNIPER ---
+      // 1. Precision Stock with Cheek Riser
+      ctx.fillStyle = '#090d16';
+      ctx.fillRect(-12, -3.5, 12, 5.5);
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(-11, -4.8, 6, 1.5); // Adjustable cheek comb
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(-13, -4, 2.5, 7); // Shoulder pad
+
+      // Ergonomic Grip & Trigger assembly
+      ctx.fillStyle = '#18181b';
+      ctx.fillRect(-0.5, 2, 4.2, 6.5);
+      ctx.fillStyle = '#00f0ff';
+      ctx.fillRect(1, 4, 1.2, 3.2); // Power telemetry strip
+
+      // 2. High-Capacity Capacitor Receiver
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, -4.2, 14, 6.2);
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(1, -3.8, 12, 5.4);
+
+      // 3. Segmented Rail Accelerator Barrel
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(14, -3.2, 20, 3.4);
+
+      // Glowing Magnetic Acceleration Coils (pulsing cyan)
+      const coilGlow = isHolo ? 0.9 : 0.65 + Math.sin(timeSec * 8) * 0.35;
+      ctx.fillStyle = `rgba(56, 189, 248, ${coilGlow})`;
+      ctx.fillRect(16, -2.6, 3, 2.2);
+      ctx.fillRect(21, -2.6, 3, 2.2);
+      ctx.fillRect(26, -2.6, 3, 2.2);
+      ctx.fillRect(30, -2.6, 3, 2.2);
+
+      // Ionization Muzzle Brake Prongs
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(33, -4.2, 3.5, 5.4);
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(35.5, -3.2, 1.5, 3.4);
+
+      // 4. Illuminated Optical Scope with Mounting Rings
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(3, -9.2, 14, 3.8); // Scope tube
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(16, -8.6, 2, 2.6); // Objective lens
+      ctx.fillStyle = '#0284c7';
+      ctx.fillRect(2, -8.6, 1.6, 2.6); // Ocular eyepiece
+      // Scope Turrets
+      ctx.fillStyle = '#475569';
+      ctx.fillRect(9, -10.5, 2.5, 1.5);
+      // Mounting rings
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(4.5, -5.4, 2, 2);
+      ctx.fillRect(13.5, -5.4, 2, 2);
+
+      // Folded Bipod under barrel
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(22, 0.5, 8, 1.6);
+      break;
+    }
+
+    case 'rocket': {
+      // --- HEAVY ORDNANCE RPG LAUNCHER ---
+      // 1. Reinforced Shoulder Rest & Rear Exhaust Cone
+      ctx.fillStyle = '#141c28';
+      ctx.fillRect(-12, -4.8, 12, 8.5);
+      ctx.fillStyle = '#b45309'; // Heat-scorch exhaust bell
+      ctx.beginPath();
+      ctx.moveTo(-12, -5.8);
+      ctx.lineTo(-16, -7.5);
+      ctx.lineTo(-16, 6.2);
+      ctx.lineTo(-12, 4.5);
       ctx.closePath();
       ctx.fill();
-      // Foregrip & trigger
+
+      // 2. Main Armored Launch Tube
+      ctx.fillStyle = '#1f2937';
+      ctx.fillRect(0, -5.2, 18, 9.2);
+
+      // Military Hazard Warning Chevrons (///)
+      ctx.fillStyle = '#eab308';
+      ctx.fillRect(4, -4.5, 2.2, 8);
+      ctx.fillRect(8, -4.5, 2.2, 8);
+      ctx.fillRect(12, -4.5, 2.2, 8);
+
+      // Dual Tactical Grips & Trigger
       ctx.fillStyle = '#09090b';
-      ctx.fillRect(2, 3, 4, 5.5);
+      ctx.fillRect(3, 4, 3.8, 6.2); // Front grip
+      ctx.fillRect(11, 4, 3.2, 5.5); // Rear grip
+
+      // Optical Target-Tracking Unit on top
+      ctx.fillStyle = '#111827';
+      ctx.fillRect(4, -8.6, 8, 3.5);
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(11, -7.8, 1.5, 2);
+
+      // 3. Heavy High-Explosive Shaped-Charge Warhead
+      ctx.fillStyle = '#b91c1c';
+      ctx.beginPath();
+      ctx.moveTo(18, -6.5);
+      ctx.lineTo(25, -2.5);
+      ctx.lineTo(28, -0.6); // Pointed nose tip
+      ctx.lineTo(25, 1.5);
+      ctx.lineTo(18, 5.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Aerodynamic Stabilization Fins
+      ctx.fillStyle = '#374151';
+      ctx.fillRect(18, -8.2, 2.5, 2.5);
+      ctx.fillRect(18, 4.8, 2.5, 2.5);
+
+      // Arming indicator LED (blinking)
+      const armBlink = Math.sin(timeSec * 10) > 0;
+      ctx.fillStyle = armBlink ? '#ef4444' : '#7f1d1d';
+      ctx.beginPath();
+      ctx.arc(24, -0.6, 1.2, 0, Math.PI * 2);
+      ctx.fill();
       break;
     }
+
+    case 'grenade': {
+      // --- TACTICAL FRAG GRENADE ---
+      // Segmented Pineapple Hull
+      ctx.fillStyle = '#4d7c0f';
+      ctx.beginPath();
+      ctx.roundRect(-4, -5.5, 9, 11, 4);
+      ctx.fill();
+      ctx.strokeStyle = '#1a2e05';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Fragmentation Grid Seams
+      ctx.fillStyle = '#365314';
+      ctx.fillRect(-3, -2, 7, 1.2);
+      ctx.fillRect(-3, 1, 7, 1.2);
+      ctx.fillRect(0, -4.5, 1.2, 9);
+
+      // Fuse Neck, Safety Spoon & Pull-Ring
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(-1.5, -8, 4, 3);
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(-3.5, -8.5, 2, 8); // Spoon
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(3.5, -7.5, 2.2, 0, Math.PI * 2); // Ring
+      ctx.stroke();
+
+      // Primed Blinking LED
+      ctx.fillStyle = Math.sin(timeSec * 12) > 0 ? '#ef4444' : '#15803d';
+      ctx.beginPath();
+      ctx.arc(0.5, -3.5, 1, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+
     case 'rifle':
     default: {
-      // Assault Rifle
+      // --- MODULAR ASSAULT CARBINE ---
+      // 1. Skeletonized Tactical Stock
       ctx.fillStyle = '#1e293b';
-      ctx.fillRect(-6, -2.5, 9, 5); // stock
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(1, -3.5, 16, 4.2); // receiver
-      ctx.fillStyle = '#475569';
-      ctx.fillRect(17, -2.6, 8, 2.2); // barrel
+      ctx.fillRect(-10, -2.8, 8, 4.8);
       ctx.fillStyle = '#334155';
-      ctx.fillRect(7, 0.7, 3.8, 6.5); // magazine
+      ctx.fillRect(-10, -4, 5, 1.4); // Cheek rest
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(-11, -3.5, 2, 6); // Rubber pad
+
+      // Ergonomic Stippled Grip
       ctx.fillStyle = '#18181b';
-      ctx.fillRect(1, 0.7, 3.8, 5.5); // grip
+      ctx.fillRect(-0.5, 1.8, 4.2, 6.2);
+      ctx.fillStyle = '#3f3f46';
+      ctx.fillRect(0, 3, 3, 1);
+      ctx.fillRect(0, 5, 3, 1);
+
+      // Trigger guard & silver trigger
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(3.5, 1.8, 3.5, 3.8);
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(4.5, 2.6, 1.2, 2);
+
+      // 2. Billet Aluminum Upper/Lower Receiver
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(-2, -4.2, 14, 6.2);
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(0, -3.8, 11, 2.2); // Ejection port / bolt carrier
+
+      // Curved Banana Composite Magazine
+      ctx.fillStyle = '#27272a';
+      ctx.beginPath();
+      ctx.moveTo(7, 1.5);
+      ctx.lineTo(10.5, 1.5);
+      ctx.lineTo(8.5, 8.5);
+      ctx.lineTo(5.2, 8.5);
+      ctx.closePath();
+      ctx.fill();
+      // Amber Cartridge Window
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(6.8, 3.5, 2.2, 3.2);
+
+      // 3. Vented Handguard with Picatinny Rail
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(12, -3.8, 10, 4.8);
+      // M-LOK cooling slots
+      ctx.fillStyle = '#090d16';
+      ctx.fillRect(14, -2.4, 2.2, 1.8);
+      ctx.fillRect(18, -2.4, 2.2, 1.8);
+
+      // Barrel & Birdcage Flash Hider
+      ctx.fillStyle = '#475569';
+      ctx.fillRect(22, -2.6, 6, 2.4);
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(26.5, -3.2, 2.5, 3.6); // Compensator
+
+      // 4. Holographic Cyan Reflex Sight on Picatinny Top-Rail
+      ctx.fillStyle = '#09090b';
+      ctx.fillRect(1, -5.2, 14, 1.2); // Top Rail
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(3, -8.2, 7, 3.2); // Sight hood
+      // Cyan Reticle Window
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
+      ctx.fillRect(4.5, -7.8, 4.5, 2.4);
+      ctx.fillStyle = '#00f0ff';
+      ctx.fillRect(6.2, -6.8, 1.2, 1.2); // Center dot
       break;
     }
   }

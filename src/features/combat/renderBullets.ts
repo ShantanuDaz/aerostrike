@@ -1,5 +1,6 @@
 import type { Bullet, ActiveWeaponPickup } from './types';
 import { WEAPONS } from './weaponsConfig';
+import { drawEquippedWeapon } from '../avatar/renderAvatarParts';
 
 export function renderBullets(ctx: CanvasRenderingContext2D, bullets: Bullet[]): void {
   for (const b of bullets) {
@@ -157,41 +158,172 @@ export function renderBullets(ctx: CanvasRenderingContext2D, bullets: Bullet[]):
 /**
  * Draws floating weapon pickup crates with pulsing aura.
  */
+/**
+ * Draws floating holographic weapon pedestals displaying the actual detailed weapon vector model,
+ * energy containment field, name banner, ammo capacity, and respawn countdown ring.
+ */
 export function renderWeaponPickups(
   ctx: CanvasRenderingContext2D,
   pickups: ActiveWeaponPickup[],
   timeSec: number = 0,
 ): void {
   for (const pickup of pickups) {
-    if (pickup.respawnTimer > 0) continue; // Inactive, waiting respawn
-
-    const floatY = pickup.y + Math.sin(timeSec * 3 + pickup.x) * 4;
     const weaponConfig = WEAPONS[pickup.weaponType];
+    const themeColor = weaponConfig?.color || '#38bdf8';
+
+    // 1. Inactive State: Draw translucent wireframe base and circular cooldown countdown ring
+    if (pickup.respawnTimer > 0) {
+      const respawnTotal = 20; // 20s standard weapon crate respawn
+      const progress = Math.max(0, Math.min(1, 1 - pickup.respawnTimer / respawnTotal));
+
+      ctx.save();
+      ctx.translate(pickup.x, pickup.y);
+
+      // Floor dock socket
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.6)';
+      ctx.beginPath();
+      ctx.ellipse(0, 18, 18, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(100, 116, 139, 0.4)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Circular reload progress ring
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.65)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, 12, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
+      ctx.stroke();
+
+      // Countdown seconds
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.85)';
+      ctx.font = 'bold 8px ui-monospace, SFMono-Regular, Menlo, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${Math.ceil(pickup.respawnTimer)}s`, 0, 3);
+
+      ctx.restore();
+      continue;
+    }
+
+    // 2. Active Ready State: Full Energized Holographic Pod
+    const floatY = pickup.y - 4 + Math.sin(timeSec * 2.8 + pickup.x * 0.05) * 4;
+    const pulse = 0.75 + Math.sin(timeSec * 4 + pickup.y) * 0.25;
 
     ctx.save();
     ctx.translate(pickup.x, floatY);
+    ctx.globalAlpha = 0.8 + pulse * 0.2;
 
-    // Glowing ground aura
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+    // a. Concentric Floor Energy Rings
+    ctx.save();
+    ctx.translate(0, pickup.y - floatY + 18);
+    const auraGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, 26);
+    auraGrad.addColorStop(0, `${themeColor}44`);
+    auraGrad.addColorStop(0.65, `${themeColor}15`);
+    auraGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = auraGrad;
     ctx.beginPath();
-    ctx.ellipse(0, 16, 16, 6, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, 26, 9, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Weapon Crate Box
-    ctx.fillStyle = '#1e293b';
+    // Floor projector ring with rotating notch
+    ctx.strokeStyle = `${themeColor}66`;
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.roundRect(-16, -12, 32, 24, 4);
-    ctx.fill();
-
-    ctx.strokeStyle = weaponConfig?.color || '#3b82f6';
-    ctx.lineWidth = 2;
+    ctx.ellipse(0, 0, 19, 6.5, 0, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Weapon Label
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 9px monospace';
+    const rotTick = timeSec * 1.8;
+    const tickX = Math.cos(rotTick) * 19;
+    const tickY = Math.sin(rotTick) * 6.5;
+    ctx.fillStyle = themeColor;
+    ctx.beginPath();
+    ctx.arc(tickX, tickY, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // b. Cylindrical Holographic Containment Shimmer
+    const beamGrad = ctx.createLinearGradient(0, -18, 0, 16);
+    beamGrad.addColorStop(0, 'transparent');
+    beamGrad.addColorStop(0.35, `${themeColor}12`);
+    beamGrad.addColorStop(0.75, `${themeColor}22`);
+    beamGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = beamGrad;
+    ctx.beginPath();
+    ctx.roundRect(-22, -20, 44, 38, 6);
+    ctx.fill();
+
+    // Subtle corner brackets for containment field
+    ctx.strokeStyle = `${themeColor}88`;
+    ctx.lineWidth = 1.4;
+    const bLen = 5;
+    // Top-left
+    ctx.beginPath();
+    ctx.moveTo(-22 + bLen, -20);
+    ctx.lineTo(-22, -20);
+    ctx.lineTo(-22, -20 + bLen);
+    // Top-right
+    ctx.moveTo(22 - bLen, -20);
+    ctx.lineTo(22, -20);
+    ctx.lineTo(22, -20 + bLen);
+    // Bottom-left
+    ctx.moveTo(-22 + bLen, 18);
+    ctx.lineTo(-22, 18);
+    ctx.lineTo(-22, 18 - bLen);
+    // Bottom-right
+    ctx.moveTo(22 - bLen, 18);
+    ctx.lineTo(22, 18);
+    ctx.lineTo(22, 18 - bLen);
+    ctx.stroke();
+
+    // c. The Actual Weapon Vector Model (Floating, Bobbing & Slightly Angled)
+    ctx.save();
+    ctx.translate(-2, 0);
+    // Gentle floating tilt
+    ctx.rotate(Math.sin(timeSec * 2.2) * 0.08 - 0.04);
+    drawEquippedWeapon(ctx, pickup.weaponType, {
+      scale: 1.32,
+      isHolo: true,
+      timeSec,
+    });
+    ctx.restore();
+
+    // d. Floating Tactical Weapon HUD Tag above weapon
+    const tagY = -27;
+    const ammoLabel =
+      weaponConfig.maxAmmo === Infinity ? '∞' : `${weaponConfig.maxAmmo} RDS`;
+    const labelText = weaponConfig.name.toUpperCase();
+
+    ctx.font = 'bold 8.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+    const textWidth = ctx.measureText(labelText).width;
+    const boxW = Math.max(54, textWidth + 14);
+
+    // Tag background
+    ctx.fillStyle = 'rgba(6, 11, 23, 0.88)';
+    ctx.beginPath();
+    ctx.roundRect(-boxW / 2, tagY - 6.5, boxW, 13, 3);
+    ctx.fill();
+
+    ctx.strokeStyle = `${themeColor}99`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Glowing weapon title
+    ctx.fillStyle = themeColor;
     ctx.textAlign = 'center';
-    ctx.fillText(pickup.weaponType.toUpperCase(), 0, 4);
+    ctx.fillText(labelText, 0, tagY + 3);
+
+    // Sub-pill for ammo count
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+    ctx.beginPath();
+    ctx.roundRect(-16, tagY + 8.5, 32, 9, 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = 'bold 7px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.fillText(ammoLabel, 0, tagY + 15.5);
 
     ctx.restore();
   }

@@ -4,9 +4,11 @@ import { ctfArenaMap } from './ctfArenaMap';
 import { skyCitadelMap } from './skyCitadelMap';
 import { cryoFacilityMap } from './cryoFacilityMap';
 import { heliosCalderaMap } from './heliosCalderaMap';
+import { catacombOutpostMap } from './catacombOutpostMap';
 import type { GameMap } from '../types';
 
 export const availableMaps: Record<string, GameMap> = {
+  [catacombOutpostMap.id]: catacombOutpostMap,
   [heliosCalderaMap.id]: heliosCalderaMap,
   [ctfArenaMap.id]: ctfArenaMap,
   [skyCitadelMap.id]: skyCitadelMap,
@@ -22,4 +24,5 @@ export {
   skyCitadelMap,
   cryoFacilityMap,
   heliosCalderaMap,
+  catacombOutpostMap,
 };

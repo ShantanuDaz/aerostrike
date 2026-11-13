@@ -254,6 +254,89 @@ function drawStaticMapLayer(
       ctx.arc(obstacle.x + obstacle.width - 7, obstacle.y + 8, 1.5, 0, Math.PI * 2);
       ctx.fill();
     }
+
+    // Industrial diagonal hazard chevrons on solid fortress wall boundaries
+    if (obstacle.type === 'wall' && obstacle.height >= 80 && obstacle.width >= 30) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(obstacle.x, obstacle.y, obstacle.width, Math.min(24, obstacle.height));
+      ctx.clip();
+      ctx.strokeStyle = 'rgba(234, 179, 8, 0.22)';
+      ctx.lineWidth = 4;
+      for (let hx = obstacle.x - 20; hx <= obstacle.x + obstacle.width + 20; hx += 12) {
+        ctx.beginPath();
+        ctx.moveTo(hx, obstacle.y);
+        ctx.lineTo(hx + 14, obstacle.y + 24);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // Industrial conduit pipes along underside of long platforms
+    if (obstacle.type === 'platform' && obstacle.width >= 160) {
+      ctx.save();
+      const pipeY = obstacle.y + obstacle.height + 3;
+      ctx.strokeStyle = 'rgba(71, 85, 105, 0.65)';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(obstacle.x + 10, pipeY);
+      ctx.lineTo(obstacle.x + obstacle.width - 10, pipeY);
+      ctx.stroke();
+
+      // Conduit mounting brackets
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.5)';
+      for (let bx = obstacle.x + 24; bx < obstacle.x + obstacle.width - 16; bx += 48) {
+        ctx.fillRect(bx, obstacle.y + obstacle.height, 3.5, 5.5);
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  // 4b. Atmospheric Suspension Cables (Mini Militia Outpost & Suspension Style)
+  const platforms = map.obstacles.filter(
+    (o) => o.type === 'platform' && o.width >= 100 && o.y > 200 && o.y < map.height - 300,
+  );
+  if (platforms.length >= 2) {
+    ctx.save();
+    for (let i = 0; i < platforms.length; i++) {
+      const p1 = platforms[i];
+      for (let j = i + 1; j < platforms.length; j++) {
+        const p2 = platforms[j];
+        const dx = Math.abs(p2.x - p1.x);
+        const dy = Math.abs(p2.y - p1.y);
+        // Look for platforms slung across an open canyon gap (gap between 140px and 550px, similar elevation)
+        if (dx >= 140 && dx <= 550 && dy <= 120) {
+          const leftP = p1.x < p2.x ? p1 : p2;
+          const rightP = p1.x < p2.x ? p2 : p1;
+          const x1 = leftP.x + leftP.width;
+          const y1 = leftP.y + 2;
+          const x2 = rightP.x;
+          const y2 = rightP.y + 2;
+
+          if (x2 > x1) {
+            // Main hanging catenary suspension wire
+            const midX = (x1 + x2) * 0.5;
+            const sagY = Math.max(y1, y2) + Math.min(38, (x2 - x1) * 0.12);
+
+            ctx.strokeStyle = 'rgba(100, 116, 139, 0.45)';
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.quadraticCurveTo(midX, sagY, x2, y2);
+            ctx.stroke();
+
+            // High tension anchor cable
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.22)';
+            ctx.lineWidth = 1.0;
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.quadraticCurveTo(midX, sagY - 6, x2, y2);
+            ctx.stroke();
+          }
+        }
+      }
+    }
     ctx.restore();
   }
 
