@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createSoloBotSquad, stepSoloBots } from './botAI';
+import {
+  createSoloBotSquad,
+  findCeilingEscapeDirection,
+  hasCeilingAbove,
+  stepSoloBots,
+} from './botAI';
 import type { GameMap } from '../map/types';
 import type { Flag, Team } from '../ctf/types';
 import type { Player } from '../player/types';
@@ -195,5 +200,55 @@ describe('Solo AI Squad formation, firing, and hazard/CTF reporting', () => {
         carrierId: redBot.id,
       }),
     );
+  });
+
+  it('detects overhead ceilings, suppresses vertical boost into ceilings, and routes horizontally to the clear edge', () => {
+    const map = createBotTestMap();
+    // Add an overhead bridge / ceiling above x: 700..900
+    map.obstacles.push({ x: 700, y: 740, width: 200, height: 40, type: 'ground' });
+
+    expect(hasCeilingAbove(map, 800, 830)).toBe(true);
+    expect(hasCeilingAbove(map, 650, 830)).toBe(false);
+    expect(hasCeilingAbove(map, 950, 830)).toBe(false);
+
+    // Escape direction should be non-zero (towards 700 or 900 edge)
+    const escapeDir = findCeilingEscapeDirection(map, 800, 830, 0);
+    expect(Math.abs(escapeDir)).toBe(1);
+
+    const bots = createSoloBotSquad(map, 'blue', { squadSize: '1v1', mode: 'ffa' });
+    const bot = bots[0];
+    bot.player = {
+      ...bot.player,
+      x: 800,
+      y: 830,
+      isGrounded: true,
+      boostFuel: 100,
+      fuelOverheated: false,
+    };
+
+    // Target is positioned directly above the bot on top of the bridge
+    const targetAbove: Player = {
+      ...bot.player,
+      id: 'target_above',
+      team: 'blue',
+      x: 800,
+      y: 680,
+    };
+
+    stepSoloBots({
+      bots,
+      localPlayer: targetAbove,
+      map,
+      flags: createFlags(map),
+      matchStatus: 'playing',
+      pickups: [],
+      nowMs: 1000,
+      dt: 1 / 60,
+      mode: 'ffa',
+    });
+
+    // Instead of holding boost into the solid overhead ceiling, the bot suppresses boost and steers horizontally
+    expect(bot.input.boosting).toBe(false);
+    expect(Math.abs(bot.input.moveX)).toBe(1);
   });
 });

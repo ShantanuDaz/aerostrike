@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Bullet } from './types';
 import type { GameMap } from '../map/types';
+import { HEADSHOT_MULTIPLIER } from './weaponsConfig';
 import {
   getSafeMuzzlePoint,
   segmentRectHitT,
@@ -107,7 +108,7 @@ describe('updateBullets swept collision, muzzle safety, and splash', () => {
     expect(res.newParticles.length).toBeGreaterThan(0);
   });
 
-  it('ignores hazards while applying 1.3x headshot multiplier vs 1.0x torso hits', () => {
+  it('ignores hazards while applying 1.4x headshot multiplier vs 1.0x torso hits', () => {
     const map = makeMap([{ x: 190, y: 300, width: 100, height: 200, type: 'hazard' }]);
 
     // Headshot sphere is centered at (p.x, p.y - 16)
@@ -116,7 +117,7 @@ describe('updateBullets swept collision, muzzle safety, and splash', () => {
     const headRes = updateBullets([headShotBullet], map, [target], 1 / 60);
     expect(headRes.hits).toHaveLength(1);
     expect(headRes.hits[0].isCrit).toBe(true);
-    expect(headRes.hits[0].damage).toBe(Math.round(20 * 1.3));
+    expect(headRes.hits[0].damage).toBe(Math.round(20 * HEADSHOT_MULTIPLIER));
 
     // Torso capsule covers y + [ -2 .. +13 ]
     const bodyShotBullet = makeBullet({ id: 'b_2', x: 195, y: 408, vx: 25, damage: 20 });

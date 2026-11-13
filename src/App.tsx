@@ -182,11 +182,19 @@ export const App = () => {
       }
     };
 
+    const handleOrientationChange = () => {
+      void tryLockLandscapeOrientation();
+    };
+
     window.addEventListener('touchend', tryEnterCombatFullscreen, { passive: true });
+    window.addEventListener('touchstart', tryEnterCombatFullscreen, { passive: true });
+    window.addEventListener('orientationchange', handleOrientationChange);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       window.removeEventListener('touchend', tryEnterCombatFullscreen);
+      window.removeEventListener('touchstart', tryEnterCombatFullscreen);
+      window.removeEventListener('orientationchange', handleOrientationChange);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       tryUnlockOrientation();
     };

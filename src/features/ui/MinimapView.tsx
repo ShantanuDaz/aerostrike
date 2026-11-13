@@ -85,22 +85,22 @@ export function MinimapView({ map }: MinimapViewProps) {
   const width =
     mode === 'expanded'
       ? isShortScreen
-        ? 168
+        ? 160
         : isCompactScreen
-          ? 192
+          ? 176
           : 236
       : isCompactScreen
-        ? 112
+        ? 118
         : 148;
   const height =
     mode === 'expanded'
       ? isShortScreen
-        ? 92
+        ? 88
         : isCompactScreen
-          ? 106
+          ? 96
           : 132
       : isCompactScreen
-        ? 62
+        ? 66
         : 82;
 
   useEffect(() => {
@@ -282,9 +282,12 @@ export function MinimapView({ map }: MinimapViewProps) {
         <canvas
           ref={canvasRef}
           style={{ width: `${width}px`, height: `${height}px` }}
-          onClick={() => setMode(mode === 'compact' ? 'expanded' : 'compact')}
-          className="block cursor-pointer"
-          title="Tap to resize radar"
+          onClick={(e) => {
+            e.stopPropagation();
+            setMode(mode === 'compact' ? 'expanded' : 'compact');
+          }}
+          className="block cursor-pointer select-none"
+          title="Tap to toggle radar scale"
         />
       </div>
 

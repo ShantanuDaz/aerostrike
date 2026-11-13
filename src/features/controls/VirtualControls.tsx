@@ -3,6 +3,7 @@ import { usePlayerStore } from '../player/playerStore';
 import { useCombatStore } from '../combat/combatStore';
 import type { WeaponType } from '../combat/types';
 import { WEAPONS } from '../combat/weaponsConfig';
+import { DASH_FUEL_COST } from '../player/updatePlayer';
 import { useSettingsStore } from '../settings/settingsStore';
 import { useCTFStore } from '../ctf/ctfStore';
 import { useMatchStatsStore } from '../combat/statsStore';
@@ -459,7 +460,7 @@ export function VirtualControls({ onFire, onSwitchWeapon, onThrowGrenade }: Virt
   const isLowAmmo =
     weaponCfg.maxAmmo !== Infinity &&
     currentAmmo <= Math.max(1, Math.ceil(weaponCfg.maxAmmo * 0.25));
-  const dashReady = dashCooldown <= 0.05 && !fuelOverheated && boostFuel >= 18;
+  const dashReady = dashCooldown <= 0.05 && !fuelOverheated && boostFuel >= DASH_FUEL_COST;
 
   const moveCornerStyle = isLeftHanded
     ? {

@@ -13,7 +13,7 @@ import {
 import { useSettingsStore } from '../settings/settingsStore';
 import { useAvatarStore } from '../avatar/avatarStore';
 import { buildActiveStations, engineWorld } from '../game/engineWorld';
-import { Award, Clock, Crown, LogOut, Medal, RefreshCw, Trophy, Zap } from 'lucide-react';
+import { Award, Clock, Crown, LogOut, Medal, RefreshCw, Shuffle, Trophy, Zap } from 'lucide-react';
 
 interface GameOverModalProps {
   onLeaveMatch?: () => void;
@@ -81,11 +81,15 @@ export function GameOverModal({ onLeaveMatch }: GameOverModalProps) {
     'Pilot';
   const localFfaRank = sortedAll.findIndex((s) => s.playerId === localPlayerId);
 
-  const handlePlayAgain = () => {
+  const handlePlayAgain = (rotateMap: boolean = false) => {
     if (!canStartRematch) return;
+    let targetMap = selectedMap;
+    if (rotateMap) {
+      targetMap = useMapStore.getState().rotateToNextMap();
+    }
     clearOptimisticClaims();
     engineWorld.resetWorldForMatch(
-      (selectedMap.weaponSpawns || []).map((ws) => ({
+      (targetMap.weaponSpawns || []).map((ws) => ({
         id: ws.id,
         x: ws.x,
         y: ws.y,
@@ -93,18 +97,18 @@ export function GameOverModal({ onLeaveMatch }: GameOverModalProps) {
         respawnTimer: 0,
       })),
       true,
-      buildActiveStations(selectedMap),
+      buildActiveStations(targetMap),
     );
     const stats = useMatchStatsStore.getState();
     stats.resetStats();
     useCombatStore.getState().initLoadout(useSettingsStore.getState().defaultWeapon);
     const myPlayerId = useAvatarStore.getState().playerId;
-    usePlayerStore.getState().spawnAtTeamBase(selectedMap, myPlayerId, gameMode);
+    usePlayerStore.getState().spawnAtTeamBase(targetMap, myPlayerId, gameMode);
     const spawnedLocal = usePlayerStore.getState().player;
     stats.registerParticipant(myPlayerId, spawnedLocal.avatar.callsign, spawnedLocal.team);
 
     if (!roomCode) {
-      engineWorld.spawnSoloBots(selectedMap, spawnedLocal.team, {
+      engineWorld.spawnSoloBots(targetMap, spawnedLocal.team, {
         ...engineWorld.soloConfig,
         mode: gameMode,
       });
@@ -116,10 +120,10 @@ export function GameOverModal({ onLeaveMatch }: GameOverModalProps) {
         stats.registerParticipant(member.playerId, member.callsign, member.team);
       }
       if (isHost) {
-        networkManager.broadcastRematch(selectedMap.id);
+        networkManager.broadcastRematch(targetMap.id);
       }
     }
-    initMatch(selectedMap);
+    initMatch(targetMap);
   };
 
   const podiumMeta = [
@@ -386,13 +390,23 @@ export function GameOverModal({ onLeaveMatch }: GameOverModalProps) {
           {/* Rematch & Leave Actions */}
           <div className="flex flex-col short-wide:flex-row gap-2 w-full">
             {canStartRematch ? (
-              <button
-                type="button"
-                onClick={handlePlayAgain}
-                className="flex items-center justify-center gap-2 w-full short-wide:flex-1 py-2.5 sm:tall:py-3 short:py-2 px-3 bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500 hover:from-cyan-300 hover:to-blue-400 text-slate-950 font-black text-[11px] sm:tall:text-xs uppercase tracking-[0.12em] sm:tall:tracking-[0.15em] clip-chamfer shadow-xl transition cursor-pointer glow-cyan whitespace-nowrap"
-              >
-                <RefreshCw className="w-3.5 h-3.5 sm:tall:w-4 sm:tall:h-4 shrink-0" /> Play Again
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => handlePlayAgain(false)}
+                  className="flex items-center justify-center gap-2 w-full short-wide:flex-1 py-2.5 sm:tall:py-3 short:py-2 px-3 bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500 hover:from-cyan-300 hover:to-blue-400 text-slate-950 font-black text-[11px] sm:tall:text-xs uppercase tracking-[0.12em] sm:tall:tracking-[0.15em] clip-chamfer shadow-xl transition cursor-pointer glow-cyan whitespace-nowrap"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 sm:tall:w-4 sm:tall:h-4 shrink-0" /> Play Again
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handlePlayAgain(true)}
+                  className="flex items-center justify-center gap-2 w-full short-wide:flex-1 py-2.5 sm:tall:py-3 short:py-2 px-3 bg-slate-900/90 hover:bg-slate-800 border border-cyan-400/50 hover:border-cyan-300 text-cyan-200 hover:text-white font-mono text-[11px] sm:tall:text-xs font-black uppercase tracking-[0.12em] sm:tall:tracking-[0.15em] clip-chamfer transition cursor-pointer whitespace-nowrap"
+                  title="Rotate to next arena in sequence"
+                >
+                  <Shuffle className="w-3.5 h-3.5 sm:tall:w-4 sm:tall:h-4 text-cyan-400 shrink-0" /> Next Arena
+                </button>
+              </>
             ) : (
               <div className="flex items-center justify-center gap-1.5 w-full short-wide:flex-1 py-2.5 sm:tall:py-3 short:py-2 px-3 bg-slate-900/90 border border-cyan-500/30 text-cyan-300 font-mono text-[11px] sm:tall:text-xs font-bold uppercase tracking-wider sm:tall:tracking-widest clip-chamfer text-center leading-tight">
                 <Clock className="w-3.5 h-3.5 sm:tall:w-4 sm:tall:h-4 animate-pulse shrink-0" />{' '}

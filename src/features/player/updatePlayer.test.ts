@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { GameMap } from '../map/types';
 import type { InputState, Player } from './types';
-import { PLAYER_HALF_HEIGHT, PLAYER_HALF_WIDTH, updatePlayer } from './updatePlayer';
+import {
+  BOOST_RECOVER_THRESHOLD,
+  BOOST_REGEN_AIR,
+  DASH_COOLDOWN_SEC,
+  DASH_FUEL_COST,
+  PLAYER_HALF_HEIGHT,
+  PLAYER_HALF_WIDTH,
+  updatePlayer,
+} from './updatePlayer';
 
 function createTestMap(overrides: Partial<GameMap> = {}): GameMap {
   return {
@@ -197,21 +205,21 @@ describe('updatePlayer physics and collision', () => {
     );
     expect(50 - carrier.boostFuel).toBeCloseTo((50 - normal.boostFuel) * 1.15, 4);
 
-    // Depleting fuel locks fuelOverheated until fuel reaches threshold (14)
+    // Depleting fuel locks fuelOverheated until fuel reaches threshold
     let empty = createTestPlayer({ boostFuel: 0.2, isGrounded: false, y: 500 });
     empty = updatePlayer(empty, boostInput, map, 1 / 60, true);
     expect(empty.boostFuel).toBe(0);
     expect(empty.fuelOverheated).toBe(true);
 
-    // Regenerating to 5 (< 14) must stay overheated and refuse thrust even if boosting is held
-    let recovering = { ...empty, boostFuel: 5, vy: 2 };
+    // Regenerating below threshold must stay overheated and refuse thrust even if boosting is held
+    let recovering = { ...empty, boostFuel: BOOST_RECOVER_THRESHOLD - 2, vy: 2 };
     recovering = updatePlayer(recovering, boostInput, map, 1 / 60, true);
     expect(recovering.fuelOverheated).toBe(true);
     expect(recovering.vy).toBeGreaterThan(2); // Falling due to gravity, no thrust
 
-    // Crossing recovery threshold (14) clears fuelOverheated
+    // Crossing recovery threshold clears fuelOverheated
     const recovered = updatePlayer(
-      { ...empty, boostFuel: 13.8, isGrounded: true },
+      { ...empty, boostFuel: BOOST_RECOVER_THRESHOLD + 0.5, isGrounded: true },
       IDLE_INPUT,
       map,
       1 / 60,
@@ -233,7 +241,7 @@ describe('updatePlayer physics and collision', () => {
     );
     expect(hopped.vy).toBeLessThan(-3.5);
 
-    // Thruster dash consumes 18 fuel and starts air regen (80 - 18 + 0.27)
+    // Thruster dash consumes DASH_FUEL_COST fuel and starts air regen
     const dashed = updatePlayer(
       createTestPlayer({ x: 400, y: 500, isGrounded: false, boostFuel: 80 }),
       { ...IDLE_INPUT, moveX: -1, dash: true },
@@ -242,10 +250,10 @@ describe('updatePlayer physics and collision', () => {
       true,
     );
     expect(dashed.vx).toBeLessThan(-8);
-    expect(dashed.boostFuel).toBeCloseTo(80 - 18 + 0.27, 4);
-    expect(dashed.dashCooldown).toBeGreaterThan(2);
+    expect(dashed.boostFuel).toBeCloseTo(80 - DASH_FUEL_COST + BOOST_REGEN_AIR, 4);
+    expect(dashed.dashCooldown).toBeCloseTo(DASH_COOLDOWN_SEC, 3);
 
-    // Immediate second dash ignored while on cooldown (only air regen +0.27 applies, no -18 dash cost)
+    // Immediate second dash ignored while on cooldown (only air regen applies, no dash cost)
     const blocked = updatePlayer(
       dashed,
       { ...IDLE_INPUT, moveX: 1, dash: true },
@@ -254,7 +262,7 @@ describe('updatePlayer physics and collision', () => {
       true,
     );
     expect(blocked.vx).toBeLessThan(0);
-    expect(blocked.boostFuel).toBeCloseTo(dashed.boostFuel + 0.27, 4);
+    expect(blocked.boostFuel).toBeCloseTo(dashed.boostFuel + BOOST_REGEN_AIR, 4);
   });
 
   it('launches on bounce pads cleanly and applies configurable respawn delay on hazards', () => {

@@ -10,31 +10,31 @@ import {
 
 // Reference physics tuned at 60 FPS and scaled cleanly by delta-time (dt * 60)
 // so 60Hz, 90Hz, and 120Hz displays feel identical and responsive.
-const GRAVITY = 0.21;
-const THRUST = 0.46;
-const MAX_RISE_SPEED = -5.25;
-const MAX_FALL_SPEED = 7.2;
+export const GRAVITY = 0.22;
+export const THRUST = 0.50;
+export const MAX_RISE_SPEED = -6.2;
+export const MAX_FALL_SPEED = 8.0;
 
-const GROUND_ACCEL = 0.42;
-const AIR_ACCEL = 0.24;
-const MAX_GROUND_SPEED = 2.75;
-const MAX_AIR_SPEED = 3.6;
+export const GROUND_ACCEL = 0.56;
+export const AIR_ACCEL = 0.36;
+export const MAX_GROUND_SPEED = 3.8;
+export const MAX_AIR_SPEED = 4.8;
 
-const GROUND_DRAG_X = 0.76;
-const AIR_DRAG_X = 0.945;
-const AIR_DRAG_Y = 0.96;
+export const GROUND_DRAG_X = 0.78;
+export const AIR_DRAG_X = 0.955;
+export const AIR_DRAG_Y = 0.965;
 
-const BOOST_DRAIN = 0.42;
-const BOOST_REGEN_AIR = 0.27;
-const BOOST_REGEN_GROUND = 0.58;
-const BOOST_RECOVER_THRESHOLD = 14;
-const MAX_UPWARD_SPEED = -15;
-const COYOTE_TIME_SEC = 0.11;
-const GROUND_HOP_VY = -4.15;
-const DASH_SPEED = 9.6;
-const DASH_FUEL_COST = 18;
-const DASH_COOLDOWN_SEC = 2.4;
-const DASH_DURATION_SEC = 0.14;
+export const BOOST_DRAIN = 0.26;
+export const BOOST_REGEN_AIR = 0.38;
+export const BOOST_REGEN_GROUND = 0.78;
+export const BOOST_RECOVER_THRESHOLD = 10;
+export const MAX_UPWARD_SPEED = -15;
+export const COYOTE_TIME_SEC = 0.11;
+export const GROUND_HOP_VY = -4.5;
+export const DASH_SPEED = 11.2;
+export const DASH_FUEL_COST = 10;
+export const DASH_COOLDOWN_SEC = 1.25;
+export const DASH_DURATION_SEC = 0.13;
 
 export const PLAYER_HALF_WIDTH = 14;
 export const PLAYER_HALF_HEIGHT = 25;

@@ -1,5 +1,5 @@
 import type { AvatarConfig, HeadgearType, JetpackStyle, VisorStyle } from '../avatar/types';
-import { WEAPONS } from '../combat/weaponsConfig';
+import { HEADSHOT_MULTIPLIER, WEAPONS } from '../combat/weaponsConfig';
 import type { Flag, GameMode, MatchStatus, Team } from '../ctf/types';
 import type {
   DamageEvent,
@@ -157,7 +157,7 @@ export function validateIncomingDamage(ctx: DamageValidationContext): boolean {
   const maxSingleHit =
     evt.weaponType === 'rocket' || evt.weaponType === 'grenade'
       ? Math.round(weaponCfg.damage) + 2
-      : Math.round(weaponCfg.damage * 1.3) + 2;
+      : Math.round(weaponCfg.damage * HEADSHOT_MULTIPLIER) + 2;
 
   if (evt.damage > maxSingleHit) {
     console.warn(

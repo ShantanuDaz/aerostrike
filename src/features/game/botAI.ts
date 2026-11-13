@@ -313,6 +313,53 @@ function isOverHazard(map: GameMap, x: number, y: number, dirX: number): boolean
   return false;
 }
 
+export function hasCeilingAbove(map: GameMap, x: number, y: number, height: number = 80): boolean {
+  for (let dy = 24; dy <= height; dy += 20) {
+    const probeY = y - dy;
+    if (
+      isPointInSolidTerrain(x, probeY, map) ||
+      isPointInSolidTerrain(x - 14, probeY, map) ||
+      isPointInSolidTerrain(x + 14, probeY, map)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function findCeilingEscapeDirection(
+  map: GameMap,
+  x: number,
+  y: number,
+  preferredDir: number,
+): number {
+  if (!hasCeilingAbove(map, x, y, 80)) return 0;
+
+  const maxProbe = 320;
+  let leftClearDist = Infinity;
+  let rightClearDist = Infinity;
+
+  for (let offset = 24; offset <= maxProbe; offset += 24) {
+    if (leftClearDist === Infinity && !hasCeilingAbove(map, x - offset, y, 80)) {
+      leftClearDist = offset;
+    }
+    if (rightClearDist === Infinity && !hasCeilingAbove(map, x + offset, y, 80)) {
+      rightClearDist = offset;
+    }
+    if (leftClearDist !== Infinity && rightClearDist !== Infinity) break;
+  }
+
+  if (leftClearDist === Infinity && rightClearDist !== Infinity) return 1;
+  if (rightClearDist === Infinity && leftClearDist !== Infinity) return -1;
+  if (leftClearDist === Infinity && rightClearDist === Infinity) {
+    return preferredDir !== 0 ? preferredDir : 1;
+  }
+
+  if (preferredDir < 0 && leftClearDist <= rightClearDist + 48) return -1;
+  if (preferredDir > 0 && rightClearDist <= leftClearDist + 48) return 1;
+  return leftClearDist < rightClearDist ? -1 : 1;
+}
+
 export interface StepSoloBotsResult {
   spawnedBullets: Bullet[];
   newlyDeadBots: {
@@ -561,6 +608,22 @@ export function stepSoloBots(params: {
       moveX = Math.sign(dx);
     }
 
+    // Overhead ceiling & bridge overhang navigation:
+    // If an overhead ceiling is blocking upward travel toward the objective, route horizontally toward the open edge!
+    const initialHazard = isOverHazard(map, p.x, p.y, moveX);
+    const ceilingBlocked = hasCeilingAbove(map, p.x, p.y);
+    if (ceilingBlocked && dy < -30 && !initialHazard) {
+      const escapeDir = findCeilingEscapeDirection(
+        map,
+        p.x,
+        p.y,
+        moveX || Math.sign(dx) || bot.strafeDir,
+      );
+      if (escapeDir !== 0) {
+        moveX = escapeDir;
+      }
+    }
+
     // Bounce strafe away from arena edges
     if (p.x < 110 && moveX < 0) moveX = 1;
     else if (p.x > map.width - 110 && moveX > 0) moveX = -1;
@@ -597,6 +660,9 @@ export function stepSoloBots(params: {
       boosting = !p.fuelOverheated && p.boostFuel > 4;
     } else if (usingBouncePad && Math.abs(dx) > 30) {
       boosting = false;
+    } else if (ceilingBlocked && !hazardDanger) {
+      // NEVER thrust straight into an overhead ceiling/bridge! Save fuel and walk horizontally out
+      boosting = false;
     } else if (wallBlocked) {
       boosting = !p.fuelOverheated && p.boostFuel > 4;
     } else if (dy < -42 && !p.fuelOverheated && p.boostFuel > (p.isGrounded ? 20 : 10)) {
@@ -617,7 +683,7 @@ export function stepSoloBots(params: {
 
     // Aim & combat evaluation scaled by difficulty
     const diff = bot.difficulty ?? 'veteran';
-    const swayAmp = diff === 'cadet' ? 0.13 : diff === 'ace' ? 0.032 : 0.07;
+    const swayAmp = diff === 'cadet' ? 0.15 : diff === 'ace' ? 0.055 : 0.085;
     const engageRange = diff === 'cadet' ? 490 : diff === 'ace' ? 680 : 600;
     let aimAngle = p.aimAngle;
     let shouldShoot = false;

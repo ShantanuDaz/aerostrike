@@ -190,45 +190,60 @@ export function renderMinimap(
       // Local player: glowing lime ring + dot
       ctx.fillStyle = '#22c55e';
       ctx.beginPath();
-      ctx.arc(px, py, 3, 0, Math.PI * 2);
+      ctx.arc(px, py, 3.8, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.strokeStyle = '#86efac';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(34, 197, 94, 0.35)';
       ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(px, py, 6, 0, Math.PI * 2);
       ctx.stroke();
     } else if (mode === 'ffa') {
       // All other pilots in Free For All are hostile targets
       ctx.fillStyle = highContrast ? '#fb7185' : '#f43f5e';
       ctx.beginPath();
       if (highContrast) {
-        ctx.moveTo(px, py - 3.4);
-        ctx.lineTo(px + 3.2, py + 2.8);
-        ctx.lineTo(px - 3.2, py + 2.8);
+        ctx.moveTo(px, py - 4.2);
+        ctx.lineTo(px + 4, py + 3.2);
+        ctx.lineTo(px - 4, py + 3.2);
         ctx.closePath();
       } else {
-        ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+        ctx.arc(px, py, 3.5, 0, Math.PI * 2);
       }
       ctx.fill();
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
     } else if (highContrast) {
       ctx.fillStyle = p.team === 'blue' ? '#38bdf8' : '#fb7185';
       ctx.beginPath();
       if (p.team === 'blue') {
-        ctx.moveTo(px, py - 3.2);
-        ctx.lineTo(px + 3.2, py);
-        ctx.lineTo(px, py + 3.2);
-        ctx.lineTo(px - 3.2, py);
+        ctx.moveTo(px, py - 4);
+        ctx.lineTo(px + 4, py);
+        ctx.lineTo(px, py + 4);
+        ctx.lineTo(px - 4, py);
       } else {
-        ctx.moveTo(px, py - 3.4);
-        ctx.lineTo(px + 3.2, py + 2.8);
-        ctx.lineTo(px - 3.2, py + 2.8);
+        ctx.moveTo(px, py - 4.2);
+        ctx.lineTo(px + 4, py + 3.2);
+        ctx.lineTo(px - 4, py + 3.2);
       }
       ctx.closePath();
       ctx.fill();
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
     } else {
       ctx.fillStyle = p.team === 'blue' ? '#3b82f6' : '#ef4444';
       ctx.beginPath();
-      ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+      ctx.arc(px, py, 3.5, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
     }
 
     // Flag carrier marker: pulsing outer ring (CTF only)

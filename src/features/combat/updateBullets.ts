@@ -1,7 +1,7 @@
 import type { Bullet, ExplosionEvent, Particle, WeaponType } from './types';
 import type { GameMap } from '../map/types';
 import { raycastMapTerrain } from '../map/terrainGeometry';
-import { GRENADE_GRAVITY } from './weaponsConfig';
+import { GRENADE_GRAVITY, HEADSHOT_MULTIPLIER } from './weaponsConfig';
 import {
   createDirectionalSparks,
   createExplosionParticles,
@@ -537,7 +537,7 @@ export function updateBullets(
         if (hitPlayer) {
           const angle = Math.atan2(bullet.vy, bullet.vx);
           const finalDamage = isHeadshot
-            ? Math.round(bullet.damage * 1.3)
+            ? Math.round(bullet.damage * HEADSHOT_MULTIPLIER)
             : bullet.damage;
 
           hits.push({

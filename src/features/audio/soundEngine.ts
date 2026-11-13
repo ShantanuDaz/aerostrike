@@ -9,12 +9,14 @@ export interface AudioSettingsPayload {
 class SoundEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
+  private masterCompressor: DynamicsCompressorNode | null = null;
   private isMuted: boolean = false;
   private masterVolume: number = 0.8; // 0..1
   private jetpackEnabled: boolean = true;
   private jetpackOsc: OscillatorNode | null = null;
   private jetpackGain: GainNode | null = null;
   private shotgunNoiseBuffer: AudioBuffer | null = null;
+  private dashNoiseBuffer: AudioBuffer | null = null;
   private explosionNoiseBuffer: AudioBuffer | null = null;
 
   private initCtx() {
@@ -33,7 +35,20 @@ class SoundEngine {
         this.isMuted ? 0 : this.masterVolume,
         this.ctx.currentTime,
       );
-      this.masterGain.connect(this.ctx.destination);
+
+      // Soft broadcast master limiter to prevent clipping during simultaneous multi-kill explosions
+      if (typeof this.ctx.createDynamicsCompressor === 'function') {
+        this.masterCompressor = this.ctx.createDynamicsCompressor();
+        this.masterCompressor.threshold.setValueAtTime(-6, this.ctx.currentTime);
+        this.masterCompressor.knee.setValueAtTime(10, this.ctx.currentTime);
+        this.masterCompressor.ratio.setValueAtTime(12, this.ctx.currentTime);
+        this.masterCompressor.attack.setValueAtTime(0.003, this.ctx.currentTime);
+        this.masterCompressor.release.setValueAtTime(0.12, this.ctx.currentTime);
+        this.masterGain.connect(this.masterCompressor);
+        this.masterCompressor.connect(this.ctx.destination);
+      } else {
+        this.masterGain.connect(this.ctx.destination);
+      }
     }
   }
 
@@ -190,12 +205,27 @@ class SoundEngine {
     if (!this.ctx || !dest) return;
 
     const t = this.ctx.currentTime;
+
+    // 1. Initial supersonic transient crack (instant attack < 25ms)
+    const crackOsc = this.ctx.createOscillator();
+    const crackGain = this.ctx.createGain();
+    crackOsc.type = 'sawtooth';
+    crackOsc.frequency.setValueAtTime(1450, t);
+    crackOsc.frequency.exponentialRampToValueAtTime(75, t + 0.025);
+    crackGain.gain.setValueAtTime(0.55, t);
+    crackGain.gain.exponentialRampToValueAtTime(0.001, t + 0.025);
+    crackOsc.connect(crackGain);
+    crackGain.connect(dest);
+    crackOsc.start(t);
+    crackOsc.stop(t + 0.025);
+
+    // 2. High-density pellet discharge body with resonant filter
     if (!this.shotgunNoiseBuffer || this.shotgunNoiseBuffer.sampleRate !== this.ctx.sampleRate) {
-      const bufferSize = Math.floor(this.ctx.sampleRate * 0.2);
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.22);
       const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
       const data = buffer.getChannelData(0);
       for (let i = 0; i < bufferSize; i++) {
-        data[i] = Math.random() * 2 - 1;
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.08));
       }
       this.shotgunNoiseBuffer = buffer;
     }
@@ -205,18 +235,44 @@ class SoundEngine {
 
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(1000, t);
-    filter.frequency.exponentialRampToValueAtTime(80, t + 0.2);
+    filter.Q.setValueAtTime(2.2, t);
+    filter.frequency.setValueAtTime(2400, t);
+    filter.frequency.exponentialRampToValueAtTime(120, t + 0.2);
 
     const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(0.5, t);
+    gain.gain.setValueAtTime(0.65, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
 
     noise.connect(filter);
     filter.connect(gain);
     gain.connect(dest);
-
     noise.start(t);
+
+    // 3. Sub-thump concussive body (chest kick)
+    const thumpOsc = this.ctx.createOscillator();
+    const thumpGain = this.ctx.createGain();
+    thumpOsc.type = 'triangle';
+    thumpOsc.frequency.setValueAtTime(170, t);
+    thumpOsc.frequency.exponentialRampToValueAtTime(45, t + 0.09);
+    thumpGain.gain.setValueAtTime(0.45, t);
+    thumpGain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+    thumpOsc.connect(thumpGain);
+    thumpGain.connect(dest);
+    thumpOsc.start(t);
+    thumpOsc.stop(t + 0.09);
+
+    // 4. Subtle mechanical pump action click at +110ms
+    const pumpOsc = this.ctx.createOscillator();
+    const pumpGain = this.ctx.createGain();
+    pumpOsc.type = 'triangle';
+    pumpOsc.frequency.setValueAtTime(2200, t + 0.11);
+    pumpOsc.frequency.exponentialRampToValueAtTime(1400, t + 0.135);
+    pumpGain.gain.setValueAtTime(0.12, t + 0.11);
+    pumpGain.gain.exponentialRampToValueAtTime(0.001, t + 0.135);
+    pumpOsc.connect(pumpGain);
+    pumpGain.connect(dest);
+    pumpOsc.start(t + 0.11);
+    pumpOsc.stop(t + 0.135);
   }
 
   public playSniper() {
@@ -225,21 +281,45 @@ class SoundEngine {
     if (!this.ctx || !dest) return;
 
     const t = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
 
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(1400, t);
-    osc.frequency.exponentialRampToValueAtTime(90, t + 0.35);
+    // 1. High-voltage ionization crack (hypersonic transient snap)
+    const crackOsc = this.ctx.createOscillator();
+    const crackGain = this.ctx.createGain();
+    crackOsc.type = 'sawtooth';
+    crackOsc.frequency.setValueAtTime(3400, t);
+    crackOsc.frequency.exponentialRampToValueAtTime(320, t + 0.04);
+    crackGain.gain.setValueAtTime(0.5, t);
+    crackGain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+    crackOsc.connect(crackGain);
+    crackGain.connect(dest);
+    crackOsc.start(t);
+    crackOsc.stop(t + 0.04);
 
-    gain.gain.setValueAtTime(0.4, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+    // 2. Resonant electromagnetic rail hum
+    const boreOsc = this.ctx.createOscillator();
+    const boreGain = this.ctx.createGain();
+    boreOsc.type = 'sine';
+    boreOsc.frequency.setValueAtTime(1750, t);
+    boreOsc.frequency.exponentialRampToValueAtTime(95, t + 0.38);
+    boreGain.gain.setValueAtTime(0.42, t);
+    boreGain.gain.exponentialRampToValueAtTime(0.001, t + 0.38);
+    boreOsc.connect(boreGain);
+    boreGain.connect(dest);
+    boreOsc.start(t);
+    boreOsc.stop(t + 0.38);
 
-    osc.connect(gain);
-    gain.connect(dest);
-
-    osc.start(t);
-    osc.stop(t + 0.35);
+    // 3. Sub-bass kinetic recoil discharge
+    const subOsc = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    subOsc.type = 'triangle';
+    subOsc.frequency.setValueAtTime(210, t);
+    subOsc.frequency.exponentialRampToValueAtTime(38, t + 0.22);
+    subGain.gain.setValueAtTime(0.48, t);
+    subGain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+    subOsc.connect(subGain);
+    subGain.connect(dest);
+    subOsc.start(t);
+    subOsc.stop(t + 0.22);
   }
 
   public playGrenadeThrow() {
@@ -325,12 +405,28 @@ class SoundEngine {
     if (!this.ctx || !dest) return;
 
     const t = this.ctx.currentTime;
+
+    // 1. Supersonic initial wavefront / transient crack (0 - 35ms)
+    const crackOsc = this.ctx.createOscillator();
+    const crackGain = this.ctx.createGain();
+    crackOsc.type = 'sawtooth';
+    crackOsc.frequency.setValueAtTime(2800, t);
+    crackOsc.frequency.exponentialRampToValueAtTime(90, t + 0.035);
+    crackGain.gain.setValueAtTime(0.7, t);
+    crackGain.gain.exponentialRampToValueAtTime(0.001, t + 0.035);
+    crackOsc.connect(crackGain);
+    crackGain.connect(dest);
+    crackOsc.start(t);
+    crackOsc.stop(t + 0.035);
+
+    // 2. High-energy debris rattle and turbulent fireball noise
     if (!this.explosionNoiseBuffer || this.explosionNoiseBuffer.sampleRate !== this.ctx.sampleRate) {
-      const bufferSize = Math.floor(this.ctx.sampleRate * 0.45);
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.55);
       const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
       const data = buffer.getChannelData(0);
       for (let i = 0; i < bufferSize; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.1));
+        // Multi-frequency decay with chaotic turbulence
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.14));
       }
       this.explosionNoiseBuffer = buffer;
     }
@@ -340,31 +436,44 @@ class SoundEngine {
 
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(520, t);
-    filter.frequency.exponentialRampToValueAtTime(45, t + 0.45);
+    filter.Q.setValueAtTime(1.8, t);
+    filter.frequency.setValueAtTime(1100, t);
+    filter.frequency.exponentialRampToValueAtTime(45, t + 0.5);
 
     const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(0.75, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+    gain.gain.setValueAtTime(0.85, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
 
     noise.connect(filter);
     filter.connect(gain);
     gain.connect(dest);
-
     noise.start(t);
 
-    // Sub-bass concussive punch
+    // 3. Heavy concussive seismic sub-bass drop (0 - 340ms)
     const subOsc = this.ctx.createOscillator();
     const subGain = this.ctx.createGain();
     subOsc.type = 'sine';
-    subOsc.frequency.setValueAtTime(135, t);
-    subOsc.frequency.exponentialRampToValueAtTime(30, t + 0.28);
-    subGain.gain.setValueAtTime(0.55, t);
-    subGain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+    subOsc.frequency.setValueAtTime(160, t);
+    subOsc.frequency.exponentialRampToValueAtTime(24, t + 0.34);
+    subGain.gain.setValueAtTime(0.8, t);
+    subGain.gain.exponentialRampToValueAtTime(0.001, t + 0.34);
     subOsc.connect(subGain);
     subGain.connect(dest);
     subOsc.start(t);
-    subOsc.stop(t + 0.3);
+    subOsc.stop(t + 0.34);
+
+    // 4. Secondary terrain echo rumble (at +60ms)
+    const echoOsc = this.ctx.createOscillator();
+    const echoGain = this.ctx.createGain();
+    echoOsc.type = 'triangle';
+    echoOsc.frequency.setValueAtTime(85, t + 0.06);
+    echoOsc.frequency.exponentialRampToValueAtTime(30, t + 0.26);
+    echoGain.gain.setValueAtTime(0.35, t + 0.06);
+    echoGain.gain.exponentialRampToValueAtTime(0.001, t + 0.26);
+    echoOsc.connect(echoGain);
+    echoGain.connect(dest);
+    echoOsc.start(t + 0.06);
+    echoOsc.stop(t + 0.26);
   }
 
   // --- JETPACK CONTINUOUS SOUND ---
@@ -408,35 +517,52 @@ class SoundEngine {
     if (!this.ctx || !dest) return;
 
     const t = this.ctx.currentTime;
-    if (!this.shotgunNoiseBuffer || this.shotgunNoiseBuffer.sampleRate !== this.ctx.sampleRate) {
-      const bufferSize = Math.floor(this.ctx.sampleRate * 0.2);
+
+    // Dedicated high-velocity compressed air thruster burst
+    if (!this.dashNoiseBuffer || this.dashNoiseBuffer.sampleRate !== this.ctx.sampleRate) {
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.16);
       const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
       const data = buffer.getChannelData(0);
       for (let i = 0; i < bufferSize; i++) {
-        data[i] = Math.random() * 2 - 1;
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.06));
       }
-      this.shotgunNoiseBuffer = buffer;
+      this.dashNoiseBuffer = buffer;
     }
 
     const noise = this.ctx.createBufferSource();
-    noise.buffer = this.shotgunNoiseBuffer;
+    noise.buffer = this.dashNoiseBuffer;
 
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'bandpass';
-    filter.Q.setValueAtTime(1.6, t);
-    filter.frequency.setValueAtTime(1100, t);
-    filter.frequency.exponentialRampToValueAtTime(220, t + 0.14);
+    filter.Q.setValueAtTime(1.8, t);
+    filter.frequency.setValueAtTime(2800, t);
+    filter.frequency.exponentialRampToValueAtTime(380, t + 0.13);
 
     const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(0.28, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+    gain.gain.setValueAtTime(0.42, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
 
     noise.connect(filter);
     filter.connect(gain);
     gain.connect(dest);
-
     noise.start(t);
-    noise.stop(t + 0.14);
+    noise.stop(t + 0.13);
+
+    // Thruster ignition pitch flare (pneumatic gas expulsion swell)
+    const flareOsc = this.ctx.createOscillator();
+    const flareGain = this.ctx.createGain();
+    flareOsc.type = 'sawtooth';
+    flareOsc.frequency.setValueAtTime(140, t);
+    flareOsc.frequency.exponentialRampToValueAtTime(320, t + 0.04);
+    flareOsc.frequency.exponentialRampToValueAtTime(80, t + 0.13);
+
+    flareGain.gain.setValueAtTime(0.24, t);
+    flareGain.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
+
+    flareOsc.connect(flareGain);
+    flareGain.connect(dest);
+    flareOsc.start(t);
+    flareOsc.stop(t + 0.13);
   }
 
   // --- CTF FANFARES ---

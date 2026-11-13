@@ -287,11 +287,27 @@ export async function tryLockLandscapeOrientation(): Promise<void> {
   const orientation = window.screen?.orientation as
     | (ScreenOrientation & { lock?: (mode: string) => Promise<void> })
     | undefined;
-  if (!orientation?.lock) return;
+  if (orientation && typeof orientation.lock === 'function') {
+    try {
+      await orientation.lock('landscape');
+      return;
+    } catch {
+      // Expected when browser is not in fullscreen or standalone PWA mode
+    }
+  }
+
+  // Fallback for vendor-prefixed screen orientation APIs on older mobile engines
+  const legacyScreen = window.screen as unknown as {
+    lockOrientation?: (m: string) => boolean;
+    mozLockOrientation?: (m: string) => boolean;
+    msLockOrientation?: (m: string) => boolean;
+  };
   try {
-    await orientation.lock('landscape');
+    legacyScreen.lockOrientation?.('landscape') ||
+      legacyScreen.mozLockOrientation?.('landscape') ||
+      legacyScreen.msLockOrientation?.('landscape');
   } catch {
-    // Expected when browser is not in fullscreen or standalone PWA mode
+    // ignore
   }
 }
 

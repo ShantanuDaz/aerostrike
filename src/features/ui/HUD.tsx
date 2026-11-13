@@ -8,6 +8,7 @@ import { useNetworkStore } from '../network/networkStore';
 import { useMapStore } from '../map/mapStore';
 import { useSettingsStore } from '../settings/settingsStore';
 import { WEAPONS } from '../combat/weaponsConfig';
+import { DASH_COOLDOWN_SEC, DASH_FUEL_COST } from '../player/updatePlayer';
 import { useIsTouchHUD } from '../controls/useIsTouchHUD';
 import { sounds } from '../audio/soundEngine';
 import { networkManager } from '../network/peerRoom';
@@ -190,11 +191,11 @@ export function HUD({ onExitToWarRoom, onAbortRoom }: HUDProps) {
   const hpPct = Math.max(0, Math.min(100, (player.health / player.maxHealth) * 100));
   const fuelPct = Math.max(0, Math.min(100, (player.boostFuel / player.maxFuel) * 100));
   const dashCooldown = player.dashCooldown ?? 0;
-  const dashHasFuel = !player.fuelOverheated && player.boostFuel >= 18;
+  const dashHasFuel = !player.fuelOverheated && player.boostFuel >= DASH_FUEL_COST;
   const dashReady = dashCooldown <= 0.05 && dashHasFuel;
   const dashBarPct =
     dashCooldown > 0.05
-      ? Math.max(0, Math.min(100, (1 - dashCooldown / 2.4) * 100))
+      ? Math.max(0, Math.min(100, (1 - dashCooldown / DASH_COOLDOWN_SEC) * 100))
       : dashHasFuel
         ? 100
         : 20;
@@ -222,10 +223,10 @@ export function HUD({ onExitToWarRoom, onAbortRoom }: HUDProps) {
   // Responsive HUD scale tokens
   const barWidthCls =
     hudScale === 'compact'
-      ? 'w-8 xs:w-11 sm:w-20'
+      ? 'w-16 xs:w-22 sm:w-28'
       : hudScale === 'large'
-        ? 'w-12 xs:w-16 sm:w-28'
-        : 'w-9 xs:w-14 sm:w-24';
+        ? 'w-24 xs:w-32 sm:w-44'
+        : 'w-20 xs:w-28 sm:w-36';
   const vitalsLabelCls =
     hudScale === 'compact'
       ? 'text-[9px] sm:text-[9px]'
@@ -282,85 +283,93 @@ export function HUD({ onExitToWarRoom, onAbortRoom }: HUDProps) {
                   </span>
                 </div>
 
-                <div className="flex flex-col gap-0.5 xs:gap-1">
-                  {/* Health Bar */}
-                  <div className="flex items-center gap-1 xs:gap-1.5">
+                <div className="flex flex-col gap-1 xs:gap-1.5">
+                  {/* Health Bar (Thickened with high-contrast text & alert pulse) */}
+                  <div className="flex items-center gap-1.5 xs:gap-2">
                     <span
-                      className={`${vitalsLabelCls} font-mono font-black text-rose-400 w-4 tracking-wider`}
+                      className={`${vitalsLabelCls} font-mono font-black text-rose-400 w-5 tracking-wider`}
                     >
                       HP
                     </span>
                     <div
-                      className={`${barWidthCls} h-1.5 bg-slate-950 rounded-xs overflow-hidden border border-slate-800`}
+                      className={`${barWidthCls} h-3.5 bg-slate-950 rounded-xs overflow-hidden border border-slate-700/80 shadow-[inset_0_1px_3px_rgba(0,0,0,0.9)] relative`}
                     >
                       <div
-                        className="h-full bg-gradient-to-r from-rose-500 to-emerald-400 transition-all duration-75"
+                        className={`h-full transition-all duration-75 ${
+                          hpPct < 30
+                            ? 'bg-gradient-to-r from-red-600 to-rose-500 animate-pulse'
+                            : hpPct < 60
+                              ? 'bg-gradient-to-r from-amber-500 to-yellow-400'
+                              : 'bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-400'
+                        }`}
                         style={{ width: `${hpPct}%` }}
                       />
                     </div>
                     <span
-                      className={`${vitalsLabelCls} font-mono font-bold text-slate-200 min-w-[20px] text-right tabular-nums`}
+                      className={`${vitalsLabelCls} font-mono font-black min-w-[28px] text-right tabular-nums ${
+                        hpPct < 30 ? 'text-rose-400 animate-pulse' : 'text-slate-100'
+                      }`}
                     >
                       {Math.ceil(player.health)}
                     </span>
                   </div>
 
-                  {/* Jetpack Fuel Bar */}
-                  <div className="flex items-center gap-1 xs:gap-1.5">
+                  {/* Jetpack Fuel Bar (Thickened with overheat alert) */}
+                  <div className="flex items-center gap-1.5 xs:gap-2">
                     <span
-                      className={`${vitalsLabelCls} font-mono font-black w-4 tracking-wider ${
+                      className={`${vitalsLabelCls} font-mono font-black w-5 tracking-wider ${
                         player.fuelOverheated ? 'text-amber-400' : 'text-cyan-400'
                       }`}
                     >
                       JET
                     </span>
                     <div
-                      className={`${barWidthCls} h-1.5 bg-slate-950 rounded-xs overflow-hidden border border-slate-800`}
+                      className={`${barWidthCls} h-3 bg-slate-950 rounded-xs overflow-hidden border border-slate-700/80 shadow-[inset_0_1px_3px_rgba(0,0,0,0.9)] relative`}
                     >
                       <div
                         className={`h-full transition-all duration-75 ${
                           player.fuelOverheated
-                            ? 'bg-gradient-to-r from-rose-500 to-amber-400'
+                            ? 'bg-gradient-to-r from-rose-600 to-amber-500 animate-pulse'
                             : 'bg-gradient-to-r from-sky-500 to-cyan-300'
                         }`}
                         style={{ width: `${fuelPct}%` }}
                       />
                     </div>
                     <span
-                      className={`${vitalsLabelCls} font-mono min-w-[20px] text-right tabular-nums ${
-                        player.fuelOverheated ? 'text-amber-300' : 'text-cyan-300/90'
+                      className={`${vitalsLabelCls} font-mono font-black min-w-[28px] text-right tabular-nums ${
+                        player.fuelOverheated ? 'text-amber-300 animate-pulse' : 'text-cyan-300'
                       }`}
                     >
-                      {Math.round(fuelPct)}%
+                      {player.fuelOverheated ? 'HOT' : `${Math.round(fuelPct)}%`}
                     </span>
                   </div>
 
-                  {/* Thruster Dash Bar */}
-                  <div className="flex items-center gap-1 xs:gap-1.5">
+                  {/* Thruster Dash Bar (Responsive 1.25s cadence) */}
+                  <div className="flex items-center gap-1.5 xs:gap-2">
                     <span
-                      className={`${vitalsLabelCls} font-mono font-black w-4 tracking-wider flex items-center gap-0.5 ${
+                      className={`${vitalsLabelCls} font-mono font-black w-5 tracking-wider flex items-center gap-0.5 ${
                         dashReady ? 'text-sky-300' : 'text-slate-500'
                       }`}
                       title="Thruster Air-Dash [Shift]"
                     >
-                      <Wind className="w-2.5 h-2.5 shrink-0" />
+                      <Wind className="w-3 h-3 shrink-0" />
                     </span>
                     <div
-                      className={`${barWidthCls} h-1 bg-slate-950 rounded-xs overflow-hidden border border-slate-800`}
+                      className={`${barWidthCls} h-2 bg-slate-950 rounded-xs overflow-hidden border border-slate-700/80 shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)] relative`}
                     >
                       <div
                         className={`h-full transition-all duration-75 ${
                           dashReady
-                            ? 'bg-gradient-to-r from-cyan-400 to-sky-300'
+                            ? 'bg-gradient-to-r from-cyan-400 to-sky-300 glow-cyan'
                             : dashCooldown > 0.05
-                              ? 'bg-slate-500'
+                              ? 'bg-slate-600'
                               : 'bg-amber-500/70'
                         }`}
                         style={{ width: `${dashBarPct}%` }}
                       />
                     </div>
                     <span
-                      className={`text-[9px] font-mono font-bold min-w-[20px] text-right tabular-nums ${
+                      className={`text-[9px] font-mono font-bold min-w-[28px] text-right tabular-nums ${
                         dashReady ? 'text-cyan-300' : 'text-slate-400'
                       }`}
                     >
@@ -566,23 +575,25 @@ export function HUD({ onExitToWarRoom, onAbortRoom }: HUDProps) {
             <div className="flex items-center gap-1 sm:gap-1.5 pointer-events-auto shrink-0">
               {Boolean(roomCode) && <VoiceMicButton compact showLabelOnDesktop={false} />}
 
-              <button
-                type="button"
-                onClick={() => {
-                  sounds.playUiClick();
-                  setManualScoreboardOpen((open) => !open);
-                }}
-                className={`min-w-[36px] min-h-[36px] px-2 sm:px-2.5 bg-slate-950/85 hover:bg-slate-900 border transition cursor-pointer clip-chamfer flex items-center justify-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wider ${
-                  manualScoreboardOpen
-                    ? 'border-cyan-400 text-cyan-200 glow-cyan'
-                    : 'border-slate-700/80 hover:border-cyan-400/50 text-slate-300 hover:text-white'
-                }`}
-                title="Tactical Scoreboard [Tab]"
-                aria-label="Tactical Scoreboard"
-              >
-                <Users className="w-4 h-4" />
-                <span className="hidden md:inline">Board</span>
-              </button>
+              {!isTouchHUD && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    sounds.playUiClick();
+                    setManualScoreboardOpen((open) => !open);
+                  }}
+                  className={`min-w-[36px] min-h-[36px] px-2 sm:px-2.5 bg-slate-950/85 hover:bg-slate-900 border transition cursor-pointer clip-chamfer flex items-center justify-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wider ${
+                    manualScoreboardOpen
+                      ? 'border-cyan-400 text-cyan-200 glow-cyan'
+                      : 'border-slate-700/80 hover:border-cyan-400/50 text-slate-300 hover:text-white'
+                  }`}
+                  title="Tactical Scoreboard [Tab]"
+                  aria-label="Tactical Scoreboard"
+                >
+                  <Users className="w-4 h-4" />
+                  <span className="hidden md:inline">Board</span>
+                </button>
+              )}
 
               <button
                 type="button"
@@ -716,51 +727,51 @@ export function HUD({ onExitToWarRoom, onAbortRoom }: HUDProps) {
         </div>
       </div>
 
-      {/* DESKTOP BOTTOM-CENTER ARSENAL DOCK (Hidden on mobile touch screens) */}
-      {!isTouchHUD && (
-        <div
-          data-no-joystick="true"
-          className="fixed bottom-3 left-1/2 -translate-x-1/2 z-20 pointer-events-auto"
-        >
-          <div className="relative overflow-hidden cyber-panel clip-chamfer px-1.5 py-1 flex items-center gap-1 border border-cyan-500/30 shadow-2xl">
-            {ARSENAL_SLOTS.map((slot) => {
-              const active = equippedWeapon === slot.id;
-              const cfg = WEAPONS[slot.id];
-              const isUnlimited = cfg.maxAmmo === Infinity;
-              const slotAmmo = ammoByWeapon[slot.id] ?? 0;
-              const hasAmmo = isUnlimited || slotAmmo > 0;
-              const isLowAmmo =
-                !isUnlimited &&
-                hasAmmo &&
-                slotAmmo <= Math.max(1, Math.ceil(cfg.maxAmmo * 0.25));
-              return (
-                <button
-                  key={slot.id}
-                  type="button"
-                  disabled={!hasAmmo}
-                  onClick={() => {
-                    if (hasAmmo && equippedWeapon !== slot.id) {
-                      sounds.playUiClick();
-                      setEquippedWeapon(slot.id);
-                    }
-                  }}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider transition clip-chamfer ${
-                    active
-                      ? isLowAmmo
-                        ? 'bg-amber-500/20 border border-amber-400 text-white font-black cursor-pointer'
-                        : 'bg-cyan-500/20 border border-cyan-400 text-white font-black glow-cyan cursor-pointer'
-                      : hasAmmo
-                        ? 'bg-slate-950/70 border border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-900/80 font-bold cursor-pointer'
-                        : 'bg-slate-950/40 border border-transparent text-slate-600 font-bold opacity-45 cursor-not-allowed'
-                  }`}
-                  title={
-                    hasAmmo
-                      ? `${cfg.name} [Key ${slot.keyHint}]`
-                      : `${cfg.name} (Out of ammo — find a crate)`
+      {/* BOTTOM-CENTER ARSENAL DOCK (Responsive for Desktop & Mobile) */}
+      <div
+        data-no-joystick="true"
+        className="fixed bottom-2 sm:bottom-3 left-1/2 -translate-x-1/2 z-20 pointer-events-auto max-w-[96vw] overflow-x-auto"
+      >
+        <div className="relative overflow-hidden cyber-panel clip-chamfer px-1 sm:px-1.5 py-0.5 sm:py-1 flex items-center gap-0.5 sm:gap-1 border border-cyan-500/30 shadow-2xl backdrop-blur-md bg-slate-950/85">
+          {ARSENAL_SLOTS.map((slot) => {
+            const active = equippedWeapon === slot.id;
+            const cfg = WEAPONS[slot.id];
+            const isUnlimited = cfg.maxAmmo === Infinity;
+            const slotAmmo = ammoByWeapon[slot.id] ?? 0;
+            const hasAmmo = isUnlimited || slotAmmo > 0;
+            const isLowAmmo =
+              !isUnlimited &&
+              hasAmmo &&
+              slotAmmo <= Math.max(1, Math.ceil(cfg.maxAmmo * 0.25));
+            return (
+              <button
+                key={slot.id}
+                type="button"
+                disabled={!hasAmmo}
+                onClick={() => {
+                  if (hasAmmo && equippedWeapon !== slot.id) {
+                    sounds.playUiClick();
+                    setEquippedWeapon(slot.id);
                   }
-                >
+                }}
+                className={`flex items-center gap-1 sm:gap-1.5 px-1.5 xs:px-2 sm:px-2.5 py-0.5 sm:py-1 text-[8.5px] xs:text-[9.5px] sm:text-[10px] font-mono uppercase tracking-wider transition clip-chamfer ${
+                  active
+                    ? isLowAmmo
+                      ? 'bg-amber-500/20 border border-amber-400 text-white font-black cursor-pointer'
+                      : 'bg-cyan-500/20 border border-cyan-400 text-white font-black glow-cyan cursor-pointer'
+                    : hasAmmo
+                      ? 'bg-slate-950/70 border border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-900/80 font-bold cursor-pointer'
+                      : 'bg-slate-950/40 border border-transparent text-slate-600 font-bold opacity-45 cursor-not-allowed'
+                }`}
+                title={
+                  hasAmmo
+                    ? `${cfg.name} [Key ${slot.keyHint}]`
+                    : `${cfg.name} (Out of ammo — find a crate)`
+                }
+              >
+                {!isTouchHUD && (
                   <span
-                    className={`text-[9px] px-1 ${
+                    className={`text-[8px] sm:text-[9px] px-0.5 sm:px-1 ${
                       active
                         ? isLowAmmo
                           ? 'bg-amber-400 text-slate-950 font-black'
@@ -770,62 +781,64 @@ export function HUD({ onExitToWarRoom, onAbortRoom }: HUDProps) {
                   >
                     {slot.keyHint}
                   </span>
-                  <span>{slot.shortLabel}</span>
-                  {active ? (
-                    <span className={`${isLowAmmo ? 'text-amber-300' : 'text-cyan-300'} pl-0.5`}>
-                      {isUnlimited ? '∞' : `${currentAmmo}/${cfg.maxAmmo}`}
-                    </span>
-                  ) : (
-                    <span
-                      className={`text-[9px] pl-0.5 ${isLowAmmo ? 'text-amber-400/90' : 'text-slate-500'}`}
-                    >
-                      {isUnlimited ? '∞' : slotAmmo}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-            <div className="h-5 w-px bg-slate-700/75 mx-0.5 shrink-0" />
-            <button
-              type="button"
-              disabled={grenades <= 0}
-              onClick={() => {
-                if (grenades > 0) {
-                  window.dispatchEvent(new CustomEvent('aerostrike:throw-grenade'));
-                }
-              }}
-              className={`flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider transition clip-chamfer border ${
-                grenades > 0
-                  ? 'bg-lime-950/70 hover:bg-lime-900/70 border-lime-500/60 text-lime-200 font-bold cursor-pointer'
-                  : 'bg-slate-950/40 border-transparent text-slate-600 font-bold opacity-45 cursor-not-allowed'
-              }`}
-              title={
-                grenades > 0
-                  ? 'Throw Frag Grenade [Key G or Right-Click]'
-                  : 'Out of Frag Grenades — Resupply at Supply Crate'
+                )}
+                <span>{slot.shortLabel}</span>
+                {active ? (
+                  <span className={`${isLowAmmo ? 'text-amber-300' : 'text-cyan-300'} pl-0.5 font-bold`}>
+                    {isUnlimited ? '∞' : `${currentAmmo}/${cfg.maxAmmo}`}
+                  </span>
+                ) : (
+                  <span
+                    className={`text-[8.5px] sm:text-[9px] pl-0.5 ${isLowAmmo ? 'text-amber-400/90' : 'text-slate-500'}`}
+                  >
+                    {isUnlimited ? '∞' : slotAmmo}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+          <div className="h-4 sm:h-5 w-px bg-slate-700/75 mx-0.5 shrink-0" />
+          <button
+            type="button"
+            disabled={grenades <= 0}
+            onClick={() => {
+              if (grenades > 0) {
+                window.dispatchEvent(new CustomEvent('aerostrike:throw-grenade'));
               }
-            >
+            }}
+            className={`flex items-center gap-1 sm:gap-1.5 px-1.5 xs:px-2 sm:px-2.5 py-0.5 sm:py-1 text-[8.5px] xs:text-[9.5px] sm:text-[10px] font-mono uppercase tracking-wider transition clip-chamfer border ${
+              grenades > 0
+                ? 'bg-lime-950/70 hover:bg-lime-900/70 border-lime-500/60 text-lime-200 font-bold cursor-pointer'
+                : 'bg-slate-950/40 border-transparent text-slate-600 font-bold opacity-45 cursor-not-allowed'
+            }`}
+            title={
+              grenades > 0
+                ? 'Throw Frag Grenade [Key G or Right-Click]'
+                : 'Out of Frag Grenades — Resupply at Supply Crate'
+            }
+          >
+            {!isTouchHUD && (
               <span
-                className={`text-[9px] px-1 ${
+                className={`text-[8px] sm:text-[9px] px-0.5 sm:px-1 ${
                   grenades > 0 ? 'bg-lime-400 text-slate-950 font-black' : 'text-slate-500'
                 }`}
               >
                 G
               </span>
-              <Bomb className={`w-3 h-3 ${grenades > 0 ? 'text-lime-300' : 'text-slate-600'}`} />
-              <span>Frag</span>
-              <span className={grenades > 0 ? 'text-lime-300 font-black' : 'text-slate-500'}>
-                {grenades}/{maxGrenades}
-              </span>
-            </button>
-            <div
-              ref={dockCooldownRef}
-              style={{ transform: 'scaleX(0)' }}
-              className="absolute bottom-0 inset-x-0 h-0.5 bg-cyan-400/90 origin-left pointer-events-none"
-            />
-          </div>
+            )}
+            <Bomb className={`w-2.5 h-2.5 sm:w-3 sm:h-3 ${grenades > 0 ? 'text-lime-300' : 'text-slate-600'}`} />
+            <span className="hidden xs:inline">Frag</span>
+            <span className={grenades > 0 ? 'text-lime-300 font-black' : 'text-slate-500'}>
+              {grenades}/{maxGrenades}
+            </span>
+          </button>
+          <div
+            ref={dockCooldownRef}
+            style={{ transform: 'scaleX(0)' }}
+            className="absolute bottom-0 inset-x-0 h-0.5 bg-cyan-400/90 origin-left pointer-events-none"
+          />
         </div>
-      )}
+      </div>
 
       {/* SQUAD COMMS OVERLAY (Quick Emojis, Chat Drawer & Speaking Strip) */}
       <HudCommsOverlay isTouchHUD={isTouchHUD} />
@@ -855,6 +868,7 @@ export function HUD({ onExitToWarRoom, onAbortRoom }: HUDProps) {
         isTouchHUD={isTouchHUD}
         onClose={() => setTacticalMenuOpen(false)}
         onLeaveMatch={onExitToWarRoom}
+        onOpenScoreboard={() => setManualScoreboardOpen(true)}
       />
     </>
   );

@@ -9,6 +9,7 @@ import {
   type Team,
 } from '../../ctf/types';
 import type { GameMap } from '../../map/types';
+import { useMapStore } from '../../map/mapStore';
 import type { RosterMember } from '../../network/types';
 import { sounds } from '../../audio/soundEngine';
 import { MapSchematicPreview } from './MapSchematicPreview';
@@ -17,10 +18,12 @@ import {
   Check,
   Clock,
   Crosshair,
+  Dices,
   Flag,
   Lock,
   Map as MapIcon,
   ShieldAlert,
+  Shuffle,
   Skull,
   SlidersHorizontal,
   Sparkles,
@@ -87,6 +90,37 @@ export function TheaterSelectModal({
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto cyber-scroll p-3.5 sm:tall:p-5 short:p-3 bg-slate-950/60">
+          {isHost && (
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-900/80 border border-cyan-500/30 clip-chamfer">
+              <span className="text-[10px] font-mono font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> Host Tactical Rotation
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    sounds.playUiClick();
+                    const next = useMapStore.getState().rotateToNextMap();
+                    onSelectMap(next.id);
+                  }}
+                  className="px-2.5 py-1 bg-cyan-950/60 hover:bg-cyan-900/80 border border-cyan-400/50 text-cyan-200 hover:text-white text-[9px] font-mono font-bold uppercase clip-chamfer flex items-center gap-1 cursor-pointer transition"
+                >
+                  <Shuffle className="w-3 h-3 text-cyan-400" /> Next in Cycle
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    sounds.playUiClick();
+                    const rnd = useMapStore.getState().randomizeMap();
+                    onSelectMap(rnd.id);
+                  }}
+                  className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 hover:text-white text-[9px] font-mono font-bold uppercase clip-chamfer flex items-center gap-1 cursor-pointer transition"
+                >
+                  <Dices className="w-3 h-3 text-amber-400" /> Random Arena
+                </button>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 short-wide:grid-cols-3 sm:grid-cols-3 gap-2.5 sm:gap-3">
             {Object.values(availableMaps).map((m) => {
               const isSelected = selectedMap.id === m.id;

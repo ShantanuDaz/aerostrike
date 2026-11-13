@@ -34,6 +34,7 @@ import {
   ShieldAlert,
   Sliders,
   Smartphone,
+  Users,
   Vibrate,
   Volume2,
   VolumeX,
@@ -45,6 +46,7 @@ interface InGameMenuModalProps {
   isTouchHUD: boolean;
   onClose: () => void;
   onLeaveMatch: () => void;
+  onOpenScoreboard?: () => void;
 }
 
 export function InGameMenuModal({
@@ -52,6 +54,7 @@ export function InGameMenuModal({
   isTouchHUD,
   onClose,
   onLeaveMatch,
+  onOpenScoreboard,
 }: InGameMenuModalProps) {
   const [confirmLeave, setConfirmLeave] = useState(false);
 
@@ -477,6 +480,25 @@ export function InGameMenuModal({
                 </button>
               </div>
             </div>
+          )}
+
+          {/* Tactical Scoreboard Access */}
+          {onOpenScoreboard && (
+            <button
+              type="button"
+              onClick={() => {
+                sounds.playUiClick();
+                onClose();
+                onOpenScoreboard();
+              }}
+              className="w-full py-2 px-3 bg-slate-900/90 hover:bg-slate-800 border border-cyan-500/40 hover:border-cyan-400 text-cyan-200 text-xs font-mono font-bold uppercase tracking-wider clip-chamfer flex items-center justify-between cursor-pointer transition glow-cyan"
+            >
+              <div className="flex items-center gap-2">
+                <Users className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Tactical Scoreboard & Stats</span>
+              </div>
+              <span className="text-[10px] text-slate-400 font-mono">[Tab]</span>
+            </button>
           )}
 
           {/* Display / Fullscreen Row */}
