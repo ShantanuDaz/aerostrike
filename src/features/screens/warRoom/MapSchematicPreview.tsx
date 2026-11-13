@@ -33,6 +33,135 @@ export function MapSchematicPreview({
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, w, h);
 
+    // If 3D Holodeck Map: Render tactical site schematic
+    if (map.id.startsWith('holodeck-')) {
+      const isBravo = map.id === 'holodeck-bravo';
+      // Tactical cyan grid
+      ctx.strokeStyle = isSelected ? 'rgba(6, 182, 212, 0.22)' : 'rgba(6, 182, 212, 0.1)';
+      ctx.lineWidth = 1;
+      for (let gx = 12; gx < w; gx += 16) {
+        ctx.beginPath();
+        ctx.moveTo(gx, 0);
+        ctx.lineTo(gx, h);
+        ctx.stroke();
+      }
+      for (let gy = 12; gy < h; gy += 16) {
+        ctx.beginPath();
+        ctx.moveTo(0, gy);
+        ctx.lineTo(w, gy);
+        ctx.stroke();
+      }
+
+      // Outer tactical boundary
+      const pad = 8;
+      ctx.strokeStyle = isSelected ? 'rgba(56, 189, 248, 0.8)' : 'rgba(56, 189, 248, 0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(pad, pad, w - pad * 2, h - pad * 2);
+
+      if (isBravo) {
+        // Elevated Skybridge / Catwalk
+        ctx.fillStyle = isSelected ? 'rgba(192, 132, 252, 0.35)' : 'rgba(192, 132, 252, 0.2)';
+        ctx.fillRect(w * 0.44, pad + 8, w * 0.12, h - pad * 2 - 16);
+        ctx.strokeStyle = 'rgba(192, 132, 252, 0.6)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(w * 0.44, pad + 8, w * 0.12, h - pad * 2 - 16);
+
+        // Site A (Emerald Dais - East)
+        const siteAX = w * 0.76;
+        const siteAY = h * 0.5;
+        ctx.fillStyle = '#10b981';
+        ctx.beginPath();
+        ctx.arc(siteAX, siteAY, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.font = 'bold 9px ui-monospace, monospace';
+        ctx.fillStyle = '#34d399';
+        ctx.textAlign = 'center';
+        ctx.fillText('[A]', siteAX, siteAY - 6);
+
+        // Site B (Ruby Reactor - West)
+        const siteBX = w * 0.24;
+        const siteBY = h * 0.5;
+        ctx.fillStyle = '#f43f5e';
+        ctx.beginPath();
+        ctx.arc(siteBX, siteBY, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.fillStyle = '#fb7185';
+        ctx.fillText('[B]', siteBX, siteBY - 6);
+
+        // Badge: 3D TACTICAL
+        ctx.font = 'bold 8px ui-monospace, monospace';
+        ctx.fillStyle = '#c084fc';
+        ctx.textAlign = 'center';
+        ctx.fillText('3D FPS • NEON NEXUS', w * 0.5, h - pad - 3);
+        return;
+      }
+
+      // Holodeck Alpha layout
+      // Mid courtyard cover blocks
+      ctx.fillStyle = isSelected ? 'rgba(148, 163, 184, 0.4)' : 'rgba(148, 163, 184, 0.25)';
+      ctx.fillRect(w * 0.45, h * 0.38, w * 0.1, h * 0.24);
+
+      // Spawn Zones
+      // Blue Defender Spawn (Left)
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.18)';
+      ctx.fillRect(pad + 2, pad + 2, w * 0.18, h - pad * 2 - 4);
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.6)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(pad + 2, pad + 2, w * 0.18, h - pad * 2 - 4);
+
+      // Red Attacker Spawn (Right)
+      ctx.fillStyle = 'rgba(251, 113, 133, 0.18)';
+      ctx.fillRect(w - pad - w * 0.18 - 2, pad + 2, w * 0.18, h - pad * 2 - 4);
+      ctx.strokeStyle = 'rgba(251, 113, 133, 0.6)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(w - pad - w * 0.18 - 2, pad + 2, w * 0.18, h - pad * 2 - 4);
+
+      // Site A Marker (Top-ish Mid)
+      const siteAX = w * 0.64;
+      const siteAY = h * 0.34;
+      ctx.fillStyle = '#10b981';
+      ctx.beginPath();
+      ctx.arc(siteAX, siteAY, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.font = 'bold 9px ui-monospace, monospace';
+      ctx.fillStyle = '#34d399';
+      ctx.textAlign = 'center';
+      ctx.fillText('[A]', siteAX, siteAY - 6);
+
+      // Site B Marker (Bottom-ish Mid)
+      const siteBX = w * 0.36;
+      const siteBY = h * 0.66;
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.arc(siteBX, siteBY, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillText('[B]', siteBX, siteBY + 12);
+
+      // Badge: 3D TACTICAL
+      ctx.font = 'bold 8px ui-monospace, monospace';
+      ctx.fillStyle = '#22d3ee';
+      ctx.textAlign = 'center';
+      ctx.fillText('3D FPS • SPIKE DEFUSAL', w * 0.5, h - pad - 3);
+      return;
+    }
+
     ctx.strokeStyle = isSelected ? 'rgba(34, 211, 238, 0.1)' : 'rgba(148, 163, 184, 0.05)';
     ctx.lineWidth = 1;
     for (let gx = 16; gx < w; gx += 20) {

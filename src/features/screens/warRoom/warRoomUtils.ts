@@ -8,6 +8,7 @@ export function getCleanMapTitle(map: GameMap): string {
 }
 
 export function getMapModeTag(map: GameMap): string {
+  if (map.id.startsWith('holodeck-')) return '3D TACTICAL';
   if (map.id === 'helios-caldera') return 'SLOPES CTF';
   if (map.id === 'ctf-canyon-arena') return 'LARGE CTF';
   if (map.id === 'sky-citadel') return 'AERIAL CTF';

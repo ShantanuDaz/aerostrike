@@ -138,6 +138,8 @@ export function WarRoomScreen({
     defaultAvatar: DEFAULT_AVATAR,
   });
 
+  const is3DMode = matchRules.mode === 'holodeck' || selectedMap.id.startsWith('holodeck-');
+
   const handleCopyLink = () => {
     sounds.playUiClick();
     const link = `${window.location.origin}${window.location.pathname}?room=${roomCode || ""}`;
@@ -223,6 +225,8 @@ export function WarRoomScreen({
         localPlayerId={localPlayerId}
         defaultWeapon={defaultWeapon}
         localTeam={localTeam}
+        is3DMode={matchRules.mode === 'holodeck' || selectedMap.id.startsWith('holodeck-')}
+        mapId={selectedMap.id}
       />
 
       {/* CRT Scanline Overlay */}
@@ -671,6 +675,7 @@ export function WarRoomScreen({
         isHost={isHost}
         selectedMap={selectedMap}
         availableMaps={availableMaps}
+        is3D={is3DMode}
         onSelectMap={handleSelectMap}
         onClose={() => setShowMapModal(false)}
       />
@@ -694,6 +699,7 @@ export function WarRoomScreen({
         isOpen={showRulesModal}
         isHost={isHost}
         matchRules={matchRules}
+        is3D={is3DMode}
         onUpdateRules={handleUpdateRules}
         onClose={() => setShowRulesModal(false)}
       />

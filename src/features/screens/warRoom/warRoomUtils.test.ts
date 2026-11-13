@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_AVATAR } from '../../avatar/avatarStore';
-import { deriveWarRoomSquad } from './warRoomUtils';
+import { deriveWarRoomSquad, getMapModeTag } from './warRoomUtils';
+import { holodeckMap } from '../../map/maps';
 
 describe('deriveWarRoomSquad', () => {
   it('keeps distinct peers who share the same callsign and derives local ready status from roster', () => {
@@ -45,5 +46,9 @@ describe('deriveWarRoomSquad', () => {
     expect(result.redMembers).toHaveLength(1);
     expect(result.redMembers[0].peerId).toBe('peer-duplicate-name');
     expect(result.readyCount).toBe(1);
+  });
+
+  it('correctly maps 3D tactical mode tag for holodeckMap', () => {
+    expect(getMapModeTag(holodeckMap)).toBe('3D TACTICAL');
   });
 });

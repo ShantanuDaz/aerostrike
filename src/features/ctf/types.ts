@@ -1,8 +1,8 @@
 export type Team = 'blue' | 'red';
 
-export type GameMode = 'ctf' | 'tdm' | 'ffa';
+export type GameMode = 'ctf' | 'tdm' | 'ffa' | 'holodeck';
 
-export const GAME_MODES: readonly GameMode[] = ['ctf', 'tdm', 'ffa'] as const;
+export const GAME_MODES: readonly GameMode[] = ['ctf', 'tdm', 'ffa', 'holodeck'] as const;
 
 export interface GameModeMeta {
   id: GameMode;
@@ -37,6 +37,14 @@ export const GAME_MODE_META: Record<GameMode, GameModeMeta> = {
     tagline: 'Top 3 Kill Podium',
     description: 'Every pilot for themselves — 1st, 2nd, and 3rd place are decided by total kills within the time limit.',
     isTeamBased: false,
+  },
+  holodeck: {
+    id: 'holodeck',
+    label: 'Data Core Defusal',
+    shortLabel: 'SND',
+    tagline: 'Search & Destroy',
+    description: 'Attackers arm the Data Core at Site A or B; Defenders prevent or defuse before detonation.',
+    isTeamBased: true,
   },
 };
 

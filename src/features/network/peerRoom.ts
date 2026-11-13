@@ -558,6 +558,14 @@ export class PeerNetworkManager {
     sendVoiceStateBroadcast(this.session, (msg, exclude) => this.sendToNetwork(msg, exclude), micEnabled);
   }
 
+  public broadcast3DPacket(buf: ArrayBuffer) {
+    if (this.session.isHostRole) {
+      this.fastSync.broadcast3DStateBuffer(buf);
+    } else {
+      this.fastSync.send3DStateToHost(buf);
+    }
+  }
+
   public requestRejoinSync() {
     if (this.session.isHostRole || !this.session.hostConn?.open) return;
     const myPlayerId = useAvatarStore.getState().playerId;

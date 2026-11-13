@@ -13,6 +13,7 @@ import { useCombatStore } from './features/combat/combatStore';
 import { clearOptimisticClaims } from './features/combat/optimisticClaims';
 import { useMatchStatsStore } from './features/combat/statsStore';
 import { useSettingsStore, type SettingsTab } from './features/settings/settingsStore';
+import { useHolodeckStore } from './features/holodeck/game/holodeckStore';
 import { sounds } from './features/audio/soundEngine';
 import { music } from './features/audio/musicEngine';
 import {
@@ -50,6 +51,12 @@ const HUD = lazy(() =>
 const GameOverModal = lazy(() =>
   import('./features/ui/GameOverModal').then((m) => ({ default: m.GameOverModal })),
 );
+const Tactical3DCanvas = lazy(() =>
+  import('./features/holodeck/Tactical3DCanvas').then((m) => ({ default: m.Tactical3DCanvas })),
+);
+const HolodeckHUD = lazy(() =>
+  import('./features/holodeck/ui/HolodeckHUD').then((m) => ({ default: m.HolodeckHUD })),
+);
 
 function ScreenLoadingFallback({ label }: { label: string }) {
   return (
@@ -80,6 +87,7 @@ export const App = () => {
   const selectedMap = useMapStore((s) => s.selectedMap);
   const initMatch = useCTFStore((s) => s.initMatch);
   const matchStatus = useCTFStore((s) => s.matchStatus);
+  const matchRules = useCTFStore((s) => s.matchRules);
   const crtScanlines = useSettingsStore((s) => s.crtScanlines);
 
   const [initialBoot] = useState(getInitialBoot);
@@ -329,6 +337,7 @@ export const App = () => {
   };
 
   const handleStartSoloPractice = (config?: SoloLaunchConfig) => {
+    useHolodeckStore.getState().setSoloSkirmish(true);
     const mapStore = useMapStore.getState();
     if (config?.mapId) {
       mapStore.selectMap(config.mapId);
@@ -365,6 +374,7 @@ export const App = () => {
   };
 
   const handleStartMatch = () => {
+    useHolodeckStore.getState().setSoloSkirmish(false);
     clearOptimisticClaims();
     const currentMap = useMapStore.getState().selectedMap;
     const currentMode = useCTFStore.getState().matchRules.mode;
@@ -395,6 +405,7 @@ export const App = () => {
 
   const handleExitActiveBattle = () => {
     sounds.setJetpackBoosting(false);
+    useHolodeckStore.getState().setSoloSkirmish(false);
     engineWorld.clearSoloBots();
     useMatchStatsStore.getState().resetStats();
     const localPlayer = usePlayerStore.getState().player;
@@ -534,8 +545,20 @@ export const App = () => {
       </Suspense>
     );
   } else {
-    // --- SCREEN 5: IN-GAME (LIVE CTF MATCH) ---
-    content = (
+    // --- SCREEN 5: IN-GAME (LIVE MATCH: 3D HOLODECK OR 2D ARENA) ---
+    const is3DHolodeck = matchRules.mode === 'holodeck' || selectedMap.id.startsWith('holodeck-');
+
+    content = is3DHolodeck ? (
+      <Suspense fallback={<ScreenLoadingFallback label="Loading Holodeck Matrix..." />}>
+        <div className="fixed inset-0 overflow-hidden touch-none select-none bg-[#060913]">
+          {crtScanlines && (
+            <div className="absolute inset-0 scanline-overlay pointer-events-none z-10" />
+          )}
+          <HolodeckHUD onExitToWarRoom={handleExitActiveBattle} onAbortRoom={handleLeaveWarRoom} />
+          <Tactical3DCanvas onExitToWarRoom={handleExitActiveBattle} />
+        </div>
+      </Suspense>
+    ) : (
       <Suspense fallback={<ScreenLoadingFallback label="Deploying Combat Arena..." />}>
         <div className="fixed inset-0 overflow-hidden touch-none select-none bg-[#060913]">
           {/* Scanline CRT overlay */}

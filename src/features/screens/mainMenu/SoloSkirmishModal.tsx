@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  GAME_MODES,
   GAME_MODE_META,
   sanitizeMatchRules,
   type GameMode,
@@ -16,6 +15,7 @@ import { MapSchematicPreview } from '../warRoom/MapSchematicPreview';
 import { formatClockPreset, getCleanMapTitle, getMapModeTag } from '../warRoom/warRoomUtils';
 import {
   Bot,
+  Box,
   Clock,
   Crosshair,
   Flag,
@@ -42,6 +42,7 @@ export interface SoloLaunchConfig {
 
 interface SoloSkirmishModalProps {
   isOpen: boolean;
+  is3DMode?: boolean;
   onClose: () => void;
   onDeploy: (config: SoloLaunchConfig) => void;
 }
@@ -50,20 +51,28 @@ const MODE_ICON: Record<GameMode, typeof Flag> = {
   ctf: Flag,
   tdm: Crosshair,
   ffa: Swords,
+  holodeck: Box,
 };
 
 export function SoloSkirmishModal({
   isOpen,
+  is3DMode = false,
   onClose,
   onDeploy,
 }: SoloSkirmishModalProps) {
   const availableMaps = useMapStore((s) => s.availableMaps);
   const selectedMap = useMapStore((s) => s.selectedMap);
 
-  const [mode, setMode] = useState<GameMode>(
-    () => engineWorld.soloConfig.mode ?? 'ctf',
-  );
-  const [mapId, setMapId] = useState<string>(() => selectedMap.id);
+  const initialMode: GameMode = is3DMode
+    ? (engineWorld.soloConfig.mode === 'holodeck' || engineWorld.soloConfig.mode === 'tdm' || engineWorld.soloConfig.mode === 'ffa' ? engineWorld.soloConfig.mode : 'holodeck')
+    : (engineWorld.soloConfig.mode !== 'holodeck' ? (engineWorld.soloConfig.mode ?? 'ctf') : 'ctf');
+
+  const initialMapId = is3DMode
+    ? (selectedMap.id.startsWith('holodeck-') ? selectedMap.id : 'holodeck-alpha')
+    : (!selectedMap.id.startsWith('holodeck-') ? selectedMap.id : 'ctf-canyon-arena');
+
+  const [mode, setMode] = useState<GameMode>(initialMode);
+  const [mapId, setMapId] = useState<string>(initialMapId);
   const [squadSize, setSquadSize] = useState<SoloSquadSize>(
     () => engineWorld.soloConfig.squadSize,
   );
@@ -75,6 +84,14 @@ export function SoloSkirmishModal({
   );
   const [targetCaptures, setTargetCaptures] = useState<TargetCapturesPreset>(3);
   const [timeLimitSec, setTimeLimitSec] = useState<MatchTimeLimitPreset>(300);
+
+  const availableModes: GameMode[] = is3DMode
+    ? ['holodeck', 'tdm', 'ffa']
+    : ['ctf', 'tdm', 'ffa'];
+
+  const displayedMaps = Object.values(availableMaps).filter((m) =>
+    is3DMode ? m.id.startsWith('holodeck-') : !m.id.startsWith('holodeck-'),
+  );
 
   useEffect(() => {
     if (!isOpen) return;
@@ -132,18 +149,24 @@ export function SoloSkirmishModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="cyber-panel clip-chamfer-lg shadow-2xl w-full max-w-2xl max-h-[93dvh] flex flex-col overflow-hidden border border-emerald-500/45 glow-cyan animate-in zoom-in-95 duration-150"
+        className="cyber-panel clip-chamfer-lg shadow-2xl w-full max-w-2xl max-h-[93dvh] flex flex-col overflow-hidden border border-cyan-500/50 glow-cyan animate-in zoom-in-95 duration-150"
       >
         {/* Header */}
-        <div className="shrink-0 flex items-center justify-between px-4 sm:px-5 py-2.5 sm:py-3 border-b border-emerald-500/20 bg-slate-950/90">
+        <div className="shrink-0 flex items-center justify-between px-4 sm:px-5 py-2.5 sm:py-3 border-b border-cyan-500/20 bg-slate-950/90">
           <div className="flex items-center gap-2 min-w-0">
-            <Gamepad2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400 shrink-0" />
+            {is3DMode ? (
+              <Box className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400 shrink-0" />
+            ) : (
+              <Gamepad2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400 shrink-0" />
+            )}
             <div className="min-w-0">
               <h3 className="text-xs sm:text-sm font-black text-white tracking-wider uppercase font-mono truncate">
-                Solo Skirmish Setup
+                {is3DMode ? '3D Holodeck Solo Skirmish' : '2D Omega Solo Skirmish'}
               </h3>
               <span className="text-[9px] font-mono text-slate-400 uppercase block truncate">
-                Configure offline arena, AI difficulty, team side &amp; victory rules
+                {is3DMode
+                  ? 'Configure offline 3D tactical combat, bot AI difficulty & victory rules'
+                  : 'Configure offline 2D arena, bot AI difficulty & victory rules'}
               </span>
             </div>
           </div>
@@ -166,15 +189,15 @@ export function SoloSkirmishModal({
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-cyan-300">
-                <Skull className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <Skull className={`w-3.5 h-3.5 shrink-0 ${is3DMode ? 'text-rose-400' : 'text-amber-400'}`} />
                 Game Mode
               </span>
-              <span className="text-[10px] font-mono text-emerald-300 uppercase">
+              <span className={`text-[10px] font-mono uppercase ${is3DMode ? 'text-rose-300' : 'text-emerald-300'}`}>
                 {GAME_MODE_META[mode].shortLabel}
               </span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {GAME_MODES.map((m) => {
+              {availableModes.map((m) => {
                 const meta = GAME_MODE_META[m];
                 const Icon = MODE_ICON[m];
                 const active = mode === m;
@@ -185,7 +208,9 @@ export function SoloSkirmishModal({
                     onClick={() => handleSelectMode(m)}
                     className={`text-left p-2.5 border transition clip-chamfer cursor-pointer flex flex-col gap-1 ${
                       active
-                        ? 'bg-emerald-950/45 border-emerald-400 glow-cyan'
+                        ? is3DMode
+                          ? 'bg-rose-950/45 border-rose-400 glow-rose'
+                          : 'bg-emerald-950/45 border-emerald-400 glow-cyan'
                         : 'bg-slate-950/75 border-slate-800 hover:border-cyan-500/45 hover:bg-slate-900/80'
                     }`}
                   >
@@ -193,7 +218,7 @@ export function SoloSkirmishModal({
                       <span className="flex items-center gap-1.5 text-xs font-black text-white uppercase tracking-wide">
                         <Icon
                           className={`w-3.5 h-3.5 shrink-0 ${
-                            active ? 'text-emerald-300' : 'text-slate-400'
+                            active ? (is3DMode ? 'text-rose-300' : 'text-emerald-300') : 'text-slate-400'
                           }`}
                         />
                         {meta.label}
@@ -201,7 +226,9 @@ export function SoloSkirmishModal({
                       <span
                         className={`px-1.5 py-0.5 text-[9px] font-mono font-black uppercase ${
                           active
-                            ? 'bg-emerald-400 text-slate-950'
+                            ? is3DMode
+                              ? 'bg-rose-400 text-slate-950'
+                              : 'bg-emerald-400 text-slate-950'
                             : 'bg-slate-900 text-slate-400 border border-slate-700/80'
                         }`}
                       >
@@ -221,15 +248,35 @@ export function SoloSkirmishModal({
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-cyan-300">
-                <MapIcon className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                Combat Theater
+                {is3DMode ? (
+                  <Box className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                ) : (
+                  <MapIcon className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                )}
+                {is3DMode ? '3D Combat Theater' : '2D Combat Arena'}
               </span>
               <span className="text-[10px] font-mono text-slate-400">
                 {getCleanMapTitle(availableMaps[mapId] ?? selectedMap)}
               </span>
             </div>
-            <div className="grid grid-cols-1 short-wide:grid-cols-3 sm:grid-cols-3 gap-2">
-              {Object.values(availableMaps).map((m) => {
+
+            {/* Strict Dimension Pill */}
+            <div className="flex items-center gap-1.5 mb-2.5">
+              {is3DMode ? (
+                <span className="px-2.5 py-1 text-[10px] font-mono font-bold uppercase clip-chamfer bg-rose-500 text-white flex items-center gap-1 shadow-[0_0_10px_#f43f5e]">
+                  <Box className="w-3 h-3" />
+                  <span>3D Tactical Theaters ({displayedMaps.length})</span>
+                </span>
+              ) : (
+                <span className="px-2.5 py-1 text-[10px] font-mono font-bold uppercase clip-chamfer bg-cyan-500 text-slate-950 flex items-center gap-1 glow-cyan">
+                  <MapIcon className="w-3 h-3" />
+                  <span>2D Vector Arenas ({displayedMaps.length})</span>
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 short-wide:grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {displayedMaps.map((m) => {
                 const isSelected = mapId === m.id;
                 return (
                   <button
@@ -241,7 +288,9 @@ export function SoloSkirmishModal({
                     }}
                     className={`text-left p-2 border transition flex short-wide:flex-col sm:flex-col items-center short-wide:items-stretch sm:items-stretch gap-2.5 clip-chamfer cursor-pointer ${
                       isSelected
-                        ? 'bg-emerald-950/40 border-emerald-400 glow-cyan'
+                        ? is3DMode
+                          ? 'bg-rose-950/45 border-rose-400 glow-rose'
+                          : 'bg-emerald-950/45 border-emerald-400 glow-cyan'
                         : 'bg-slate-950/75 border-slate-800 hover:border-cyan-500/45 hover:bg-slate-900/80'
                     }`}
                   >
@@ -258,7 +307,9 @@ export function SoloSkirmishModal({
                       <span
                         className={`shrink-0 px-1.5 py-0.5 text-[9px] font-mono font-black uppercase ${
                           isSelected
-                            ? 'bg-emerald-400 text-slate-950'
+                            ? is3DMode
+                              ? 'bg-rose-400 text-slate-950'
+                              : 'bg-emerald-400 text-slate-950'
                             : 'bg-slate-900 text-slate-400 border border-slate-700/80'
                         }`}
                       >

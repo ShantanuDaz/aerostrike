@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { availableMaps, ctfArenaMap } from './maps';
+import { availableMaps, ctfArenaMap, holodeckMap } from './maps';
 import type { GameMap } from './types';
 
 export const MAP_ROTATION_ORDER: string[] = [
@@ -10,6 +10,8 @@ export const MAP_ROTATION_ORDER: string[] = [
   'sky-citadel',
   'cryo-facility',
   'training-ground',
+  'holodeck-alpha',
+  'holodeck-bravo',
 ];
 
 interface MapState {
@@ -28,7 +30,10 @@ export const useMapStore = create<MapState>((set, get) => ({
   autoRotate: false,
   selectMap: (mapId: string) =>
     set((state) => ({
-      selectedMap: state.availableMaps[mapId] ?? state.selectedMap,
+      selectedMap:
+        mapId === holodeckMap.id
+          ? holodeckMap
+          : (state.availableMaps[mapId] ?? state.selectedMap),
     })),
   setAutoRotate: (enabled: boolean) => set({ autoRotate: enabled }),
   rotateToNextMap: () => {

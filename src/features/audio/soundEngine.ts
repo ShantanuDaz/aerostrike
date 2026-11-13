@@ -199,6 +199,138 @@ class SoundEngine {
     osc.stop(t + 0.08);
   }
 
+  /**
+   * Plays a 3D spatialized gunshot for 3D FPS modes with inverse-distance falloff and stereo panning.
+   */
+  public playSpatializedGunshot(
+    weapon: 'vandal' | 'operator' | 'classic',
+    sourcePos: [number, number, number],
+    listenerPos: [number, number, number],
+    listenerYaw: number,
+  ) {
+    if (this.isMuted || this.masterVolume <= 0) return;
+    this.initCtx();
+    if (!this.ctx || !this.masterGain) return;
+
+    // Calculate distance and attenuation
+    const dx = sourcePos[0] - listenerPos[0];
+    const dy = sourcePos[1] - listenerPos[1];
+    const dz = sourcePos[2] - listenerPos[2];
+    const dist = Math.hypot(dx, dy, dz);
+
+    // Audio culling beyond 85 meters
+    if (dist > 85) return;
+
+    // Inverse distance attenuation curve
+    const distanceGain = Math.max(0.04, 1.0 / (1.0 + dist * 0.075));
+
+    // Calculate relative horizontal azimuth in listener coordinate space
+    const cosYaw = Math.cos(listenerYaw);
+    const sinYaw = Math.sin(listenerYaw);
+    const localX = dx * cosYaw + dz * sinYaw;
+    const localDist = Math.max(1, Math.hypot(dx, dz));
+    const pan = Math.max(-1, Math.min(1, -localX / localDist));
+
+    const t = this.ctx.currentTime;
+    const panner = typeof this.ctx.createStereoPanner === 'function' ? this.ctx.createStereoPanner() : null;
+    if (panner) {
+      panner.pan.setValueAtTime(pan, t);
+    }
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    if (weapon === 'operator') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(320, t);
+      osc.frequency.exponentialRampToValueAtTime(45, t + 0.28);
+      gain.gain.setValueAtTime(0.55 * distanceGain, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+    } else if (weapon === 'classic') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(550, t);
+      osc.frequency.exponentialRampToValueAtTime(80, t + 0.1);
+      gain.gain.setValueAtTime(0.3 * distanceGain, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    } else {
+      // Vandal / Rifle
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(420, t);
+      osc.frequency.exponentialRampToValueAtTime(55, t + 0.14);
+      gain.gain.setValueAtTime(0.38 * distanceGain, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+    }
+
+    osc.connect(gain);
+    if (panner) {
+      gain.connect(panner);
+      panner.connect(this.masterGain);
+    } else {
+      gain.connect(this.masterGain);
+    }
+
+    const duration = weapon === 'operator' ? 0.28 : 0.14;
+    osc.start(t);
+    osc.stop(t + duration);
+  }
+
+  /**
+   * Procedural synthesized footsteps for 3D Tactical FPS modes.
+   * Shift-walking/crouching is 100% silent; sprinting is loud and punchy.
+   */
+  public playFootstep(isSprinting: boolean, isCrouching = false) {
+    if (this.isMuted || this.masterVolume <= 0 || isCrouching) return;
+    const dest = this.getOutputNode();
+    if (!this.ctx || !dest) return;
+
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = isSprinting ? 'sawtooth' : 'triangle';
+    const startFreq = isSprinting ? 140 : 95;
+    const endFreq = isSprinting ? 45 : 35;
+    osc.frequency.setValueAtTime(startFreq, t);
+    osc.frequency.exponentialRampToValueAtTime(endFreq, t + 0.055);
+
+    const volume = isSprinting ? 0.16 : 0.08;
+    gain.gain.setValueAtTime(volume, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.055);
+
+    osc.connect(gain);
+    gain.connect(dest);
+
+    osc.start(t);
+    osc.stop(t + 0.055);
+  }
+
+  /**
+   * Heavy double-heel compression thud on landing impact from jump or drop.
+   */
+  public playLandingThud(fallSpeed = 5.0) {
+    if (this.isMuted || this.masterVolume <= 0) return;
+    const dest = this.getOutputNode();
+    if (!this.ctx || !dest) return;
+
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(170, t);
+    osc.frequency.exponentialRampToValueAtTime(32, t + 0.09);
+
+    const impactVolume = Math.min(0.32, Math.max(0.08, fallSpeed * 0.035));
+    gain.gain.setValueAtTime(impactVolume, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+
+    osc.connect(gain);
+    gain.connect(dest);
+
+    osc.start(t);
+    osc.stop(t + 0.09);
+  }
+
   public playShotgun() {
     if (this.isMuted || this.masterVolume <= 0) return;
     const dest = this.getOutputNode();
@@ -742,6 +874,98 @@ class SoundEngine {
       osc.start(t);
       osc.stop(t + 0.14);
     });
+  }
+
+  // --- 3D HOLODECK PROCEDURAL AUDIO ---
+
+  public playSpikePlantTick(progress: number) {
+    if (this.isMuted || this.masterVolume <= 0) return;
+    const dest = this.getOutputNode();
+    if (!this.ctx || !dest) return;
+
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    const pitch = 440 + progress * 400; // pitch climbs from 440Hz to 840Hz
+    osc.frequency.setValueAtTime(pitch, t);
+
+    gain.gain.setValueAtTime(0.2, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+
+    osc.connect(gain);
+    gain.connect(dest);
+    osc.start(t);
+    osc.stop(t + 0.08);
+  }
+
+  public playSpikePlanted() {
+    if (this.isMuted || this.masterVolume <= 0) return;
+    const dest = this.getOutputNode();
+    if (!this.ctx || !dest) return;
+
+    // Dual-tone high-frequency lock sound
+    [880, 1320].forEach((freq, i) => {
+      const t = this.ctx!.currentTime + i * 0.08;
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.25, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+      osc.connect(gain);
+      gain.connect(dest);
+      osc.start(t);
+      osc.stop(t + 0.2);
+    });
+  }
+
+  public playSpikeBeep(urgencyRate: number) {
+    if (this.isMuted || this.masterVolume <= 0) return;
+    const dest = this.getOutputNode();
+    if (!this.ctx || !dest) return;
+
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sawtooth';
+    const freq = urgencyRate > 3 ? 1200 : 800;
+    osc.frequency.setValueAtTime(freq, t);
+
+    gain.gain.setValueAtTime(0.22, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+
+    osc.connect(gain);
+    gain.connect(dest);
+    osc.start(t);
+    osc.stop(t + 0.06);
+  }
+
+  public playSpikeDefused() {
+    if (this.isMuted || this.masterVolume <= 0) return;
+    const dest = this.getOutputNode();
+    if (!this.ctx || !dest) return;
+
+    // Victory cyber chime
+    [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+      const t = this.ctx!.currentTime + idx * 0.07;
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.3, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+      osc.connect(gain);
+      gain.connect(dest);
+      osc.start(t);
+      osc.stop(t + 0.3);
+    });
+  }
+
+  public playSpikeDetonated() {
+    this.playExplosion();
   }
 }
 

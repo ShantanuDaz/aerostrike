@@ -41,6 +41,8 @@ interface DropBayStageCanvasProps {
   localPlayerId: string;
   defaultWeapon: WeaponType;
   localTeam: Team;
+  is3DMode?: boolean;
+  mapId?: string;
 }
 
 export function DropBayStageCanvas({
@@ -49,6 +51,8 @@ export function DropBayStageCanvas({
   localPlayerId,
   defaultWeapon,
   localTeam,
+  is3DMode = false,
+  mapId,
 }: DropBayStageCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const pointerRef = useRef<{ x: number; y: number; active: boolean }>({
@@ -76,6 +80,8 @@ export function DropBayStageCanvas({
     localPlayerId,
     defaultWeapon,
     localTeam,
+    is3DMode,
+    mapId,
   });
 
   useEffect(() => {
@@ -85,8 +91,10 @@ export function DropBayStageCanvas({
       localPlayerId,
       defaultWeapon,
       localTeam,
+      is3DMode,
+      mapId,
     };
-  }, [blueMembers, redMembers, localPlayerId, defaultWeapon, localTeam]);
+  }, [blueMembers, redMembers, localPlayerId, defaultWeapon, localTeam, is3DMode, mapId]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -213,6 +221,198 @@ export function DropBayStageCanvas({
       ctx.restore();
     };
 
+    const drawHolodeck3DMatrix = (
+      cx: number,
+      cy: number,
+      w: number,
+      isPortrait: boolean,
+      currentMapId?: string,
+    ) => {
+      ctx.save();
+      const yaw = timeSec * 0.4;
+      const pitch = 0.52;
+      const cosY = Math.cos(yaw);
+      const sinY = Math.sin(yaw);
+      const cosP = Math.cos(pitch);
+      const sinP = Math.sin(pitch);
+      const holoScale = isPortrait ? Math.min(w * 0.15, 68) : Math.min(w * 0.13, 105);
+
+      const project = (x: number, y: number, z: number) => {
+        const rx = x * cosY - z * sinY;
+        const rz = x * sinY + z * cosY;
+        const ry = y * cosP - rz * sinP;
+        const rz2 = y * sinP + rz * cosP;
+        const dist = 3.0;
+        const pers = dist / (dist + rz2);
+        return {
+          px: cx + rx * holoScale * pers,
+          py: cy + ry * holoScale * pers,
+          pers,
+        };
+      };
+
+      // 1. Floor grid
+      ctx.strokeStyle = 'rgba(6, 182, 212, 0.28)';
+      ctx.lineWidth = 1;
+      const gridN = 3;
+      for (let i = -gridN; i <= gridN; i++) {
+        const u = i / gridN;
+        const p1 = project(u, 0.25, -1);
+        const p2 = project(u, 0.25, 1);
+        ctx.beginPath();
+        ctx.moveTo(p1.px, p1.py);
+        ctx.lineTo(p2.px, p2.py);
+        ctx.stroke();
+
+        const p3 = project(-1, 0.25, u);
+        const p4 = project(1, 0.25, u);
+        ctx.beginPath();
+        ctx.moveTo(p3.px, p3.py);
+        ctx.lineTo(p4.px, p4.py);
+        ctx.stroke();
+      }
+
+      // 2. Wireframe bounding box
+      const corners = [
+        [-1, -0.25, -1], [1, -0.25, -1], [1, -0.25, 1], [-1, -0.25, 1],
+        [-1, 0.25, -1], [1, 0.25, -1], [1, 0.25, 1], [-1, 0.25, 1],
+      ].map(([x, y, z]) => project(x, y, z));
+
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(corners[0].px, corners[0].py);
+      ctx.lineTo(corners[1].px, corners[1].py);
+      ctx.lineTo(corners[2].px, corners[2].py);
+      ctx.lineTo(corners[3].px, corners[3].py);
+      ctx.closePath();
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(corners[4].px, corners[4].py);
+      ctx.lineTo(corners[5].px, corners[5].py);
+      ctx.lineTo(corners[6].px, corners[6].py);
+      ctx.lineTo(corners[7].px, corners[7].py);
+      ctx.closePath();
+      ctx.stroke();
+
+      for (let i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(corners[i].px, corners[i].py);
+        ctx.lineTo(corners[i + 4].px, corners[i + 4].py);
+        ctx.stroke();
+      }
+
+      // 3. Spawn Barriers
+      const b1 = project(-1, 0.25, -0.65);
+      const b2 = project(1, 0.25, -0.65);
+      const b3 = project(1, -0.1, -0.65);
+      const b4 = project(-1, -0.1, -0.65);
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.15)';
+      ctx.beginPath();
+      ctx.moveTo(b1.px, b1.py);
+      ctx.lineTo(b2.px, b2.py);
+      ctx.lineTo(b3.px, b3.py);
+      ctx.lineTo(b4.px, b4.py);
+      ctx.closePath();
+      ctx.fill();
+
+      const r1 = project(-1, 0.25, 0.65);
+      const r2 = project(1, 0.25, 0.65);
+      const r3 = project(1, -0.1, 0.65);
+      const r4 = project(-1, -0.1, 0.65);
+      ctx.fillStyle = 'rgba(251, 113, 133, 0.15)';
+      ctx.beginPath();
+      ctx.moveTo(r1.px, r1.py);
+      ctx.lineTo(r2.px, r2.py);
+      ctx.lineTo(r3.px, r3.py);
+      ctx.lineTo(r4.px, r4.py);
+      ctx.closePath();
+      ctx.fill();
+
+      // 4. Site A Marker
+      const siteAPos = project(0.55, 0.05, -0.1);
+      const pulseA = 0.7 + Math.sin(timeSec * 4.0) * 0.3;
+      ctx.strokeStyle = '#34d399';
+      ctx.fillStyle = '#10b981';
+      ctx.beginPath();
+      ctx.arc(siteAPos.px, siteAPos.py, 3.5 * siteAPos.pers, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(siteAPos.px, siteAPos.py, (7 + pulseA * 5) * siteAPos.pers, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.font = 'bold 9px ui-monospace, SFMono-Regular, monospace';
+      ctx.fillStyle = '#34d399';
+      ctx.textAlign = 'center';
+      ctx.fillText('SITE A', siteAPos.px, siteAPos.py - 9 * siteAPos.pers);
+
+      // 5. Site B Marker
+      const siteBPos = project(-0.55, 0.05, -0.1);
+      const pulseB = 0.7 + Math.sin(timeSec * 4.0 + Math.PI) * 0.3;
+      ctx.strokeStyle = '#fbbf24';
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.arc(siteBPos.px, siteBPos.py, 3.5 * siteBPos.pers, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(siteBPos.px, siteBPos.py, (7 + pulseB * 5) * siteBPos.pers, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillText('SITE B', siteBPos.px, siteBPos.py - 9 * siteBPos.pers);
+
+      // 6. Hologram Scanning Beam Line
+      const scanPhase = (Math.sin(timeSec * 2.2) + 1) * 0.5;
+      const scanY = -0.25 + scanPhase * 0.5;
+      const sp1 = project(-1, scanY, -1);
+      const sp2 = project(1, scanY, -1);
+      const sp3 = project(1, scanY, 1);
+      const sp4 = project(-1, scanY, 1);
+      ctx.strokeStyle = 'rgba(34, 211, 238, 0.45)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(sp1.px, sp1.py);
+      ctx.lineTo(sp2.px, sp2.py);
+      ctx.lineTo(sp3.px, sp3.py);
+      ctx.lineTo(sp4.px, sp4.py);
+      ctx.closePath();
+      ctx.stroke();
+
+      // Elevated Skybridge for Holodeck Bravo
+      if (currentMapId === 'holodeck-bravo') {
+        const c1 = project(-0.2, 0.45, -0.6);
+        const c2 = project(0.2, 0.45, -0.6);
+        const c3 = project(0.2, 0.45, 0.6);
+        const c4 = project(-0.2, 0.45, 0.6);
+        ctx.strokeStyle = 'rgba(192, 132, 252, 0.7)';
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.moveTo(c1.px, c1.py);
+        ctx.lineTo(c2.px, c2.py);
+        ctx.lineTo(c3.px, c3.py);
+        ctx.lineTo(c4.px, c4.py);
+        ctx.closePath();
+        ctx.stroke();
+      }
+
+      // 7. Tactical Subtitle Badge
+      ctx.font = '900 italic 9px ui-monospace, SFMono-Regular, monospace';
+      ctx.fillStyle = currentMapId === 'holodeck-bravo' ? 'rgba(192, 132, 252, 0.95)' : 'rgba(34, 211, 238, 0.9)';
+      ctx.textAlign = 'center';
+      const matrixTitle = currentMapId === 'holodeck-bravo' ? 'HOLODECK BRAVO // NEON NEXUS' : 'HOLODECK ALPHA // VECTOR FACILITY';
+      ctx.fillText(matrixTitle, cx, cy + holoScale * 0.75 + 14);
+
+      ctx.font = 'bold 8px ui-monospace, SFMono-Regular, monospace';
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.75)';
+      ctx.fillText('3D TACTICAL SIMULATION // ZERO ASSETS PROTOCOL', cx, cy + holoScale * 0.75 + 26);
+      ctx.restore();
+    };
+
     const renderFrame = (now: number) => {
       const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) / 1000));
       lastTime = now;
@@ -229,6 +429,8 @@ export function DropBayStageCanvas({
         localPlayerId: myId,
         defaultWeapon: myWeapon,
         localTeam: myTeam,
+        is3DMode,
+        mapId: currentMapId,
       } = stageStateRef.current;
 
       ctx.fillStyle = '#060913';
@@ -326,28 +528,32 @@ export function DropBayStageCanvas({
       ctx.restore();
 
       const centerX = w * 0.5;
-      ctx.save();
-      ctx.strokeStyle = 'rgba(148, 163, 184, 0.14)';
-      ctx.setLineDash([4, 6]);
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(centerX, Math.max(82, bayCenterY - soldierRadius * 2.3));
-      ctx.lineTo(centerX, padY + 14);
-      ctx.stroke();
-      ctx.setLineDash([]);
+      if (is3DMode) {
+        drawHolodeck3DMatrix(centerX, bayCenterY - (isPortrait ? 22 : 12), w, isPortrait, currentMapId);
+      } else {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.14)';
+        ctx.setLineDash([4, 6]);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(centerX, Math.max(82, bayCenterY - soldierRadius * 2.3));
+        ctx.lineTo(centerX, padY + 14);
+        ctx.stroke();
+        ctx.setLineDash([]);
 
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.2)';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.arc(centerX, bayCenterY, isShortLandscape ? 16 : 22, 0, Math.PI * 2);
-      ctx.stroke();
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.2)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(centerX, bayCenterY, isShortLandscape ? 16 : 22, 0, Math.PI * 2);
+        ctx.stroke();
 
-      ctx.font = '900 italic 11px ui-monospace, SFMono-Regular, Menlo, monospace';
-      ctx.fillStyle = 'rgba(226, 232, 240, 0.52)';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('VS', centerX, bayCenterY + 0.5);
-      ctx.restore();
+        ctx.font = '900 italic 11px ui-monospace, SFMono-Regular, Menlo, monospace';
+        ctx.fillStyle = 'rgba(226, 232, 240, 0.52)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('VS', centerX, bayCenterY + 0.5);
+        ctx.restore();
+      }
 
       const padW = isPortrait
         ? Math.min(82, w * 0.21)

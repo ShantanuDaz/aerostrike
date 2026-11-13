@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  Box,
   Gamepad2,
   LogIn,
   Music,
@@ -55,6 +56,12 @@ export function MainMenuScreen({
   const defaultWeapon = useSettingsStore((s) => s.defaultWeapon);
   const toggleMute = useSettingsStore((s) => s.toggleMute);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
+
+  const matchRules = useCTFStore((s) => s.matchRules);
+  const setMatchRules = useCTFStore((s) => s.setMatchRules);
+  const selectMap = useMapStore((s) => s.selectMap);
+  const selectedMap = useMapStore((s) => s.selectedMap);
+  const isHolodeck = matchRules.mode === 'holodeck' || selectedMap.id.startsWith('holodeck-');
 
   const isOnline = usePwaStore((s) => s.isOnline);
   const [showJoinModal, setShowJoinModal] = useState(false);
@@ -169,9 +176,48 @@ export function MainMenuScreen({
               </div>
               <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1 text-[9px] sm:text-[10px] font-mono text-cyan-300/80 uppercase tracking-widest flex-wrap">
                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-                <span className="truncate">ORBITAL HANGAR // 2D P2P CTF</span>
+                <span className="truncate">
+                  {isHolodeck ? 'PROJECT HOLODECK // 3D TACTICAL FPS' : 'ORBITAL HANGAR // 2D P2P CTF'}
+                </span>
                 <PwaOfflinePill />
               </div>
+            </div>
+
+            {/* Center Pill: Dimension Mode Switcher (2D OMEGA vs 3D HOLODECK) */}
+            <div className="flex items-center bg-slate-950/90 border border-slate-700/80 p-0.5 sm:p-1 rounded-lg font-mono text-[10px] sm:text-xs shadow-2xl pointer-events-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  sounds.playUiClick();
+                  setMatchRules({ ...matchRules, mode: 'ctf' });
+                  selectMap('ctf-canyon-arena');
+                }}
+                className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded font-black uppercase transition-all flex items-center gap-1 sm:gap-1.5 cursor-pointer ${
+                  !isHolodeck
+                    ? 'bg-cyan-500 text-slate-950 shadow-[0_0_10px_#06b6d4]'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Rocket className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                <span>2D Omega</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  sounds.playUiClick();
+                  setMatchRules({ ...matchRules, mode: 'holodeck' });
+                  selectMap('holodeck-alpha');
+                }}
+                className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded font-black uppercase transition-all flex items-center gap-1 sm:gap-1.5 cursor-pointer ${
+                  isHolodeck
+                    ? 'bg-gradient-to-r from-rose-500 to-amber-500 text-white shadow-[0_0_10px_#f43f5e]'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Box className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-300" />
+                <span>3D Holodeck</span>
+                <span className="text-[8px] sm:text-[9px] bg-rose-950/90 text-rose-300 px-1 py-0.2 rounded border border-rose-500/50">FPS</span>
+              </button>
             </div>
 
             {/* Right: Install PWA, Music, Audio Mute & Full Settings Screen Button */}
@@ -305,11 +351,25 @@ export function MainMenuScreen({
               {/* Primary Hero DEPLOY Button */}
               <button
                 onClick={handleCreateRoom}
-                className="w-full py-2.5 short:py-2 lg:tall:py-4 px-3 xs:px-4 lg:tall:px-6 bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500 hover:from-cyan-300 hover:to-blue-400 text-slate-950 font-black text-xs sm:text-sm lg:tall:text-base uppercase tracking-[0.12em] xs:tracking-[0.15em] lg:tall:tracking-[0.2em] clip-chamfer-lg shadow-2xl shadow-cyan-950/80 transition-all cursor-pointer flex items-center justify-center gap-2 lg:gap-2.5 glow-cyan group whitespace-nowrap"
+                className={`w-full py-2.5 short:py-2 lg:tall:py-4 px-3 xs:px-4 lg:tall:px-6 font-black text-xs sm:text-sm lg:tall:text-base uppercase tracking-[0.12em] xs:tracking-[0.15em] lg:tall:tracking-[0.2em] clip-chamfer-lg shadow-2xl transition-all cursor-pointer flex items-center justify-center gap-2 lg:gap-2.5 group whitespace-nowrap ${
+                  isHolodeck
+                    ? 'bg-gradient-to-r from-rose-500 via-amber-500 to-orange-500 hover:from-rose-400 hover:to-orange-400 text-white shadow-rose-950/80 glow-rose'
+                    : 'bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500 hover:from-cyan-300 hover:to-blue-400 text-slate-950 glow-cyan shadow-cyan-950/80'
+                }`}
               >
-                <Rocket className="w-4 h-4 lg:tall:w-5 lg:tall:h-5 shrink-0 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                <span>Deploy // Host Match</span>
-                <Play className="w-3.5 h-3.5 lg:tall:w-4 lg:tall:h-4 shrink-0 fill-slate-950" />
+                {isHolodeck ? (
+                  <>
+                    <Box className="w-4 h-4 lg:tall:w-5 lg:tall:h-5 shrink-0 group-hover:rotate-12 transition-transform text-white" />
+                    <span>Host 3D Match // War Room</span>
+                    <Play className="w-3.5 h-3.5 lg:tall:w-4 lg:tall:h-4 shrink-0 fill-white" />
+                  </>
+                ) : (
+                  <>
+                    <Rocket className="w-4 h-4 lg:tall:w-5 lg:tall:h-5 shrink-0 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                    <span>Deploy // Host Match</span>
+                    <Play className="w-3.5 h-3.5 lg:tall:w-4 lg:tall:h-4 shrink-0 fill-slate-950" />
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -327,6 +387,7 @@ export function MainMenuScreen({
       {showHostModal && (
         <HostMatchModal
           isOpen
+          is3DMode={isHolodeck}
           onClose={() => setShowHostModal(false)}
           onConfirmHost={handleConfirmHostRoom}
         />
@@ -336,6 +397,7 @@ export function MainMenuScreen({
       {showSoloModal && (
         <SoloSkirmishModal
           isOpen
+          is3DMode={isHolodeck}
           onClose={() => setShowSoloModal(false)}
           onDeploy={handleSoloDeploy}
         />

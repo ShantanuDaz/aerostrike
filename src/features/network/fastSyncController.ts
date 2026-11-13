@@ -29,6 +29,8 @@ import { useCombatStore } from '../combat/combatStore';
 import { engineWorld } from '../game/engineWorld';
 import { usePlayerStore } from '../player/playerStore';
 import { useNetworkStore } from './networkStore';
+import { decodeHolodeckPacket, HOLODECK_PACKET_BYTES } from '../holodeck/net/holodeckProtocol';
+import { useHolodeckStore } from '../holodeck/game/holodeckStore';
 
 export interface FastSyncTransportCallbacks {
   isDestroyed: () => boolean;
@@ -229,6 +231,52 @@ export class FastSyncController {
   ) {
     if (!cb.isInActiveBattle()) return;
 
+    // Handle 16-byte 3D Holodeck packet
+    if (buf.byteLength === HOLODECK_PACKET_BYTES) {
+      try {
+        const decoded = decodeHolodeckPacket(buf);
+        if (decoded) {
+          useHolodeckStore.getState().setRemotePlayer(senderPeerId, {
+            id: senderPeerId,
+            callsign: cb.findMemberByPeerId(senderPeerId)?.callsign || 'Cadet',
+            team: decoded.inputs.team,
+            isLocal: false,
+            isHost: false,
+            isAlive: decoded.inputs.isAlive,
+            health: decoded.health,
+            armor: decoded.armor,
+            credits: 0,
+            position: [decoded.x, decoded.y, decoded.z],
+            velocity: [decoded.vx, decoded.vy, decoded.vz],
+            yaw: decoded.yaw,
+            pitch: decoded.pitch,
+            isCrouching: decoded.inputs.crouch,
+            isGrounded: true,
+            isSprinting: decoded.inputs.sprint,
+            activeWeaponId: decoded.inputs.weapon,
+            ammo: {
+              classic: { clip: 12, reserve: 36 },
+              vandal: { clip: 25, reserve: 75 },
+              operator: { clip: 5, reserve: 10 },
+              knife: { clip: 0, reserve: 0 },
+            },
+            kills: 0,
+            deaths: 0,
+            plants: 0,
+            defuses: 0,
+          });
+
+          // Relay from host to other clients
+          if (cb.isHostRole()) {
+            this.broadcast3DStateBuffer(buf, senderPeerId);
+          }
+        }
+      } catch {
+        // ignore malformed packet
+      }
+      return;
+    }
+
     if (cb.isHostRole()) {
       if (senderPeerId && !cb.isVerifiedPeer(senderPeerId)) return;
       const decoded = decodeClientState(buf);
@@ -241,6 +289,28 @@ export class FastSyncController {
     const batch = decodeWorldBatch(buf);
     if (!batch) return;
     this.ingestWorldBatch(batch.tickSeq, batch.entries, cb);
+  }
+
+  public broadcast3DStateBuffer(buf: ArrayBuffer, excludePeerId?: string) {
+    for (const [peerId, dc] of this.clientFastChannels) {
+      if (peerId !== excludePeerId && dc.readyState === 'open') {
+        try {
+          dc.send(buf);
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }
+
+  public send3DStateToHost(buf: ArrayBuffer) {
+    if (this.hostFastChannel?.readyState === 'open') {
+      try {
+        this.hostFastChannel.send(buf);
+      } catch {
+        // ignore
+      }
+    }
   }
 
   public ingestCadetFastState(
